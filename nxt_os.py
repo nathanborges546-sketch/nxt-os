@@ -214,6 +214,25 @@ elif menu == "📥 Importação":
         st.error(f"Erro ao ler arquivo: {e}"); st.stop()
 
     st.divider()
+
+    # 🧠 MAPEAMENTO INTELIGENTE
+    if st.button("🧠 Aplicar Mapeamento Inteligente", use_container_width=True, help="Analisa o conteúdo das colunas e mapeia automaticamente para o Notion."):
+        map_detectado = auto.identificar_colunas_por_conteudo(df)
+        if map_detectado:
+            # Aplica o mapeamento e limpa obsoletas
+            df_clean = auto.limpar_colunas_obsoletas(df, map_detectado)
+            st.session_state.imp_df_original = df_clean
+            
+            # Feedback para o usuário
+            cols_id = list(map_detectado.values())
+            st.success(f"✅ {len(cols_id)} colunas identificadas: {', '.join(cols_id)}")
+            st.info(f"🗑️ {len(df.columns) - len(df_clean.columns)} colunas inúteis removidas.")
+            time.sleep(2)
+            st.rerun()
+        else:
+            st.warning("⚠️ Não foi possível identificar padrões automáticos nesta lista.")
+
+    st.divider()
     
     # ══ INTELIGÊNCIA OUTSCRAPER (CASCATA) ══
     is_outscraper = st.checkbox("✨ Ativar Inteligência Outscraper (Cascata de E-mails)", value=False, key="imp_outscraper")
