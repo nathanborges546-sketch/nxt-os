@@ -67,6 +67,13 @@ try:
             elif ptype == "multi_select":
                 items = prop.get("multi_select") or []
                 return ", ".join([i.get("name", "") for i in items])
+            elif ptype == "rich_text":
+                rt = prop.get("rich_text", [])
+                return rt[0]["text"]["content"] if rt else ""
+            elif ptype == "formula":
+                f = prop.get("formula", {})
+                ftype = f.get("type")
+                return str(f.get(ftype, "")) if ftype else ""
             return ""
 
         while True:
@@ -88,8 +95,10 @@ try:
                 status_obj = props.get("Status de Contato", {}).get("status", {})
                 status = status_obj.get("name", "") if status_obj else ""
 
-                # Novos campos solicitados
-                decisor = _get_val(props, "Decisor")
+                # Lógica de Decisor baseada no nome (conforme solicitado pelo usuário)
+                nome_decisor = _get_val(props, "Nome do Decisor")
+                decisor = "Sim" if nome_decisor.strip() else "Não"
+
                 meio    = _get_val(props, "Meio de Contato")
                 motivo  = _get_val(props, "Motivo")
                 
