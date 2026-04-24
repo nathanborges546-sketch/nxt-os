@@ -683,18 +683,6 @@ elif menu == "📊 Métricas":
             else:
                 st.caption("Sem dados de canais registrados.")
 
-        st.divider()
-
-        # ── Avaliação Média por Tipo ──
-        st.subheader("⭐ Avaliação Média por Segmento")
-        avg_rating = (
-            df_met.groupby("Tipo de Negócio")["Avaliação"]
-            .mean()
-            .sort_values(ascending=False)
-            .round(2)
-            .rename("Média")
-        )
-        st.bar_chart(avg_rating, use_container_width=True)
 
 st.sidebar.divider()
 st.sidebar.caption("NXT OS — Powered by Gemini 2.0 Flash")
