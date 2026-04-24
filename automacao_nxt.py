@@ -309,7 +309,10 @@ MAPA_COLUNAS = {
     'meio_contato': ['Meio de Contato', 'meio', 'contact_method'],
     'observacoes': ['Observações', 'Observação', 'notes'],
     'primeiro_contato': ['Primeiro Contato', 'Data de Primeiro Contato', 'primeiro_contato'],
-    'data_resposta': ['Data de Resposta', 'Data da Resposta', 'data_resposta']
+    'data_resposta': ['Data de Resposta', 'Data da Resposta', 'data_resposta'],
+    'linkedin': ['LinkedIn', 'linkedin', 'linkedin_url'],
+    'instagram': ['Instagram', 'instagram', 'instagram_url'],
+    'facebook': ['Facebook', 'facebook', 'facebook_url']
 }
 
 def categorizar_negocio(raw_tipo):
