@@ -203,14 +203,23 @@ elif menu == "📥 Importação":
 
     try:
         raw = uploaded_file.getvalue()
-        try:   df = pd.read_csv(io.BytesIO(raw), encoding="utf-8",     dtype=str)
-        except: df = pd.read_csv(io.BytesIO(raw), encoding="ISO-8859-1", dtype=str)
-        st.session_state.imp_df_original = df.copy()
-        st.session_state.imp_initial_count = len(df)
+        # Só lê do CSV se o estado da sessão estiver vazio (primeiro upload)
+        if st.session_state.imp_df_original is None:
+            try:   df = pd.read_csv(io.BytesIO(raw), encoding="utf-8",     dtype=str)
+            except: df = pd.read_csv(io.BytesIO(raw), encoding="ISO-8859-1", dtype=str)
+            st.session_state.imp_df_original = df.copy()
+            st.session_state.imp_initial_count = len(df)
+        else:
+            df = st.session_state.imp_df_original
+
         c1, c2 = st.columns(2)
-        c1.metric("Total de Leads", f"{len(df):,}")
-        c2.metric("Colunas Detetadas", len(df.columns))
+        c1.metric("Total de Leads", f"{st.session_state.imp_initial_count:,}")
+        c2.metric("Colunas Atuais", len(df.columns))
         st.dataframe(df.head(3), use_container_width=True)
+        
+        if st.button("🔄 Reiniciar Importação (Recarregar CSV Bruto)"):
+            st.session_state.imp_df_original = None
+            st.rerun()
     except Exception as e:
         st.error(f"Erro ao ler arquivo: {e}"); st.stop()
 

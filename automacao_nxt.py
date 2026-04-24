@@ -155,54 +155,64 @@ HEADERS = {
 # ── NOVAS FUNÇÕES DE MAPEAMENTO INTELIGENTE ──
 
 def identificar_colunas_por_conteudo(df):
-    """Analisa o conteúdo das colunas para mapear automaticamente para o formato Notion.
-    Lógica Heurística v2: Prioriza dados específicos (Redes Sociais) antes de genéricos (Sites).
+    """Analisa o conteúdo e o nome das colunas para mapear automaticamente.
+    Lógica Heurística v3: Híbrida (Header + Content) e com prioridade para dados específicos.
     """
     mapeamento = {}
     colunas_df = df.columns
-    sample = df.head(10).fillna("").astype(str)
+    # Aumentamos a amostra para 30 linhas para maior precisão
+    sample = df.head(30).fillna("").astype(str)
     
-    termos_negocio = ['agência', 'marketing', 'social media', 'imobiliária', 'consultoria', 'advocacia', 'estética', 'clínica']
-    termos_localizacao = ['rua', 'av.', 'brasil', 'city', 'address', 'location', 'cidade', 'endereço', 'localização']
+    termos_negocio = ['agência', 'marketing', 'social media', 'imobiliária', 'consultoria', 'advocacia', 'estética', 'clínica', 'ltda', 'mei']
+    termos_localizacao = ['rua', 'av.', 'brasil', 'city', 'address', 'location', 'cidade', 'endereço', 'localização', 'bairro']
     
     for col in colunas_df:
-        # Garante que todos os itens sejam strings para o join não falhar
-        amostra = [str(x).lower() for x in sample[col].tolist()]
+        amostra = [str(x).lower().strip() for x in sample[col].tolist()]
         content = " ".join(amostra)
-        col_lower = col.lower()
+        col_lower = col.lower().strip()
         
-        # 1. Redes Sociais (Específicos primeiro)
-        if 'instagram.com' in content:
+        # 1. Instagram (Nome da coluna OU conteúdo)
+        if 'instagram' in col_lower or 'instagram.com' in content:
             mapeamento[col] = "Instagram"
-        elif 'linkedin.com' in content:
+            
+        # 2. LinkedIn (Nome da coluna OU conteúdo)
+        elif 'linkedin' in col_lower or 'linkedin.com' in content:
             mapeamento[col] = "LinkedIn"
-        elif 'facebook.com' in content:
+            
+        # 3. Facebook (Nome da coluna OU conteúdo)
+        elif 'facebook' in col_lower or 'facebook.com' in content or 'fb.com' in content:
             mapeamento[col] = "Facebook"
             
-        # 2. Contatos
-        elif '@' in content and '.' in content:
+        # 4. E-mail (Nome da coluna OU conteúdo)
+        elif 'email' in col_lower or 'e-mail' in col_lower or ('@' in content and '.' in content):
             mapeamento[col] = "E-mail"
-        elif any(re.search(r'\d{8,}', "".join(filter(str.isdigit, str(x)))) for x in amostra):
-            # Prioriza Telefone se o nome da coluna ajudar ou se tiver muitos dígitos
-            if any(x in col_lower for x in ["phone", "tel", "whatsapp", "contato", "mobile"]):
-                mapeamento[col] = "Telefone"
-                
-        # 3. Negócio e Localização
-        elif any(t in content for t in termos_negocio) or col_lower in ['category', 'categoria', 'industry']:
-            mapeamento[col] = "Tipo de Negócio"
-        elif any(l in content for l in termos_localizacao) or col_lower in ['city', 'address', 'location', 'cidade', 'endereço', 'localização']:
-            mapeamento[col] = "Localização"
             
-        # 4. Site Atual (O que sobrou que é link)
-        elif any(x in col_lower for x in ['link', 'website', 'site_url']) or content.startswith('http'):
+        # 5. Telefone (Nome da coluna OU conteúdo numérico longo)
+        elif any(x in col_lower for x in ["phone", "tel", "whatsapp", "contato", "mobile"]) or \
+             any(re.search(r'\d{10,}', "".join(filter(str.isdigit, x))) for x in amostra):
+            mapeamento[col] = "Telefone"
+            
+        # 6. Tipo de Negócio
+        elif any(t in col_lower for t in ['category', 'categoria', 'industry', 'tipo', 'setor']) or \
+             any(t in content for t in termos_negocio):
+            mapeamento[col] = "Tipo de Negócio"
+            
+        # 7. Site Atual (Prioridade menor: se for link e não for rede social)
+        elif any(x in col_lower for x in ['link', 'website', 'site_url', 'domain', 'url']) or \
+             any(x.startswith('http') for x in amostra if x):
             mapeamento[col] = "Site Atual"
             
-        # 5. Nome da Empresa (Baseado no nome da coluna)
-        elif col_lower in ['name', 'company_name', 'title', 'empresa', 'nome', 'company']:
+        # 8. Empresa
+        elif col_lower in ['name', 'company_name', 'title', 'empresa', 'nome', 'company', 'business_name']:
             mapeamento[col] = "Empresa"
-            
-        # 6. Decisor
-        elif any(x in col_lower for x in ['owner', 'founder', 'ceo', 'decision_maker', 'decisor']):
+
+        # 9. Localização
+        elif any(l in col_lower for l in ['city', 'address', 'location', 'cidade', 'endereço', 'localização']) or \
+             any(l in content for l in termos_localizacao):
+            mapeamento[col] = "Localização"
+
+        # 10. Decisor
+        elif any(x in col_lower for x in ['owner', 'founder', 'ceo', 'decision_maker', 'decisor', 'full_name']):
             mapeamento[col] = "Decisor"
 
     return mapeamento
