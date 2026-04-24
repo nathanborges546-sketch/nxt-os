@@ -126,7 +126,7 @@ if menu == "🏠 Dashboard":
 
         # Taxa de Decisores
         total_ativos = total # Consideramos todos na base como ativos para esta métrica
-        decisores_sim = int((df_dash["Decisor"] == "Sim").sum())
+        decisores_sim = int(df_dash["Decisor"].str.contains("Sim", na=False).sum())
         taxa_decisores = f"{(decisores_sim / total_ativos * 100):.1f}%" if total_ativos > 0 else "0.0%"
 
         # Taxa de Resposta
