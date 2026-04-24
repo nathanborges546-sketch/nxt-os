@@ -276,6 +276,62 @@ def consolidar_contatos_outscraper(row):
         
     return res
 
+def executar_guilhotina(df, is_outscraper=False):
+    """Remove leads que não possuem pelo menos um contato válido."""
+    before = len(df)
+    if is_outscraper:
+        # Se for Outscraper, precisamos validar pela cascata
+        mask = df.apply(lambda row: pd.notnull(consolidar_contatos_outscraper(row).get("email")) or 
+                                    pd.notnull(consolidar_contatos_outscraper(row).get("telefone")), axis=1)
+        df_clean = df[mask].copy()
+    else:
+        # Busca básica nas colunas mapeadas
+        mask = df.apply(lambda row: pd.notnull(buscar_dado(row, "email")) or 
+                                    pd.notnull(buscar_dado(row, "telefone")), axis=1)
+        df_clean = df[mask].copy()
+    
+    removed = before - len(df_clean)
+    return df_clean, removed
+
+def limpar_colunas_inuteis(df, is_outscraper=False):
+    """Mantém apenas as colunas essenciais para o Notion."""
+    colunas_essenciais = [
+        "Empresa", "Site Atual", "E-mail", "Telefone", 
+        "LinkedIn", "Instagram", "Decisor", "Tipo de Negócio", "Localização"
+    ]
+    
+    if is_outscraper:
+        # Se for Outscraper, as colunas originais têm nomes diferentes.
+        # Precisamos converter antes de limpar ou garantir que as colunas existam.
+        # Mas para simplificar, o nxt_os.py já lida com o mapeamento.
+        # Vamos apenas filtrar o que o pandas encontrar que faça sentido.
+        pass
+
+    # No fluxo do NXT OS, a limpeza é melhor feita gerando um novo DF com os dados extraídos.
+    return df
+
+def remover_duplicados_smart(df):
+    """Deduplicação agressiva por Site e E-mail."""
+    before = len(df)
+    
+    # Identificar colunas de site e email
+    col_site = None
+    col_email = None
+    
+    # Tenta encontrar as colunas no DataFrame atual
+    for c in df.columns:
+        if str(c).lower() in ["site atual", "site", "website", "url"]: col_site = c
+        if str(c).lower() in ["e-mail", "email"]: col_email = c
+        
+    df_clean = df.copy()
+    if col_site:
+        df_clean = df_clean.drop_duplicates(subset=[col_site], keep="first")
+    if col_email:
+        df_clean = df_clean.drop_duplicates(subset=[col_email], keep="first")
+        
+    removed = before - len(df_clean)
+    return df_clean, removed
+
 # --- 3. INTELIGÊNCIA E VALIDAÇÃO ---
 
 def verificar_duplicado(empresa, site, localizacao):

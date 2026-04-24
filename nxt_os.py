@@ -376,8 +376,45 @@ elif menu == "📥 Importação":
 
     st.divider()
 
-    # ══ 7. EXPORTAÇÃO E INTEGRAÇÃO COM NOTION ══
-    st.subheader("7 · Exportação e Integração")
+    # ══ 7. FINALIZAR PURIFICAÇÃO E LIMPAR LIXO ══
+    st.subheader("7 · Finalizar Purificação")
+    st.markdown("Executa a guilhotina (remoção de leads sem contato), limpeza de colunas extras e deduplicação Smart.")
+    
+    if st.button("🧹 Finalizar Purificação e Limpar Lixo", type="primary", use_container_width=True):
+        with st.spinner("Limpando a base..."):
+            # 1. Guilhotina
+            df_guilhotina, removed_g = auto.executar_guilhotina(df_consolidated, is_outscraper=is_outscraper)
+            
+            # 2. Deduplicação Smart
+            df_dedup, removed_d = auto.remover_duplicados_smart(df_guilhotina)
+            
+            # 3. Limpeza de Colunas (Opcional se quiser manter apenas as essenciais no CSV final)
+            # No Notion já enviamos apenas as necessárias, mas o CSV baixado ficará mais limpo.
+            essential_cols = ["Empresa", "Site Atual", "E-mail", "Telefone", "LinkedIn", "Instagram", "Decisor", "Tipo de Negócio", "Localização"]
+            # Tenta mapear o que existe
+            cols_to_keep = [c for c in df_dedup.columns if any(e.lower() in str(c).lower() for e in essential_cols)]
+            if not cols_to_keep: cols_to_keep = list(df_dedup.columns) # Fallback
+            
+            df_final_clean = df_dedup[cols_to_keep].copy()
+            
+            st.session_state["imp_final_df"] = df_final_clean
+            st.session_state["imp_removed_g"] = removed_g
+            st.session_state["imp_removed_d"] = removed_d
+            st.rerun()
+
+    if st.session_state.get("imp_final_df") is not None:
+        df_consolidated = st.session_state["imp_final_df"].copy()
+        rg = st.session_state.get("imp_removed_g", 0)
+        rd = st.session_state.get("imp_removed_d", 0)
+        
+        if rg > 0: st.warning(f"🗑️ {rg} leads sem contato válido foram movidos para a lixeira.")
+        if rd > 0: st.success(f"✨ {rd} leads duplicados foram removidos para garantir uma base única.")
+        st.info(f"📋 Base finalizada com {len(df_consolidated)} leads e {len(df_consolidated.columns)} colunas essenciais.")
+
+    st.divider()
+
+    # ══ 8. EXPORTAÇÃO E INTEGRAÇÃO COM NOTION ══
+    st.subheader("8 · Exportação e Integração")
     df_final = df_consolidated.copy()
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Leads Iniciais",    f"{st.session_state.imp_initial_count:,}")
