@@ -57,9 +57,17 @@ try:
         }
         all_results, cursor = [], None
 
-        def _get_sel(p, name):
-            obj = p.get(name, {}).get("select") or {}
-            return obj.get("name", "")
+        def _get_val(p, name):
+            prop = p.get(name, {})
+            ptype = prop.get("type")
+            if ptype == "select":
+                return (prop.get("select") or {}).get("name", "")
+            elif ptype == "status":
+                return (prop.get("status") or {}).get("name", "")
+            elif ptype == "multi_select":
+                items = prop.get("multi_select") or []
+                return ", ".join([i.get("name", "") for i in items])
+            return ""
 
         while True:
             body = {"page_size": 100}
@@ -81,9 +89,9 @@ try:
                 status = status_obj.get("name", "") if status_obj else ""
 
                 # Novos campos solicitados
-                decisor = _get_sel(props, "Decisor")
-                meio    = _get_sel(props, "Meio de Contato")
-                motivo  = _get_sel(props, "Motivo")
+                decisor = _get_val(props, "Decisor")
+                meio    = _get_val(props, "Meio de Contato")
+                motivo  = _get_val(props, "Motivo")
                 
                 # Valor Potencial (Number)
                 valor_raw = props.get("Valor Potencial", {}).get("number")

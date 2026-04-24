@@ -105,7 +105,13 @@ def _find_status_candidate(contact_col: str, all_cols: list) -> int:
 
 # ───────────────────────────── MÓDULO: DASHBOARD ─────────────────────────────
 if menu == "🏠 Dashboard":
-    st.title("🚀 NXT OS — Command Center")
+    col_h1, col_h2 = st.columns([4, 1])
+    with col_h1:
+        st.title("🚀 NXT OS — Command Center")
+    with col_h2:
+        if st.button("🔄 Sincronizar", key="dash_sync"):
+            auto.buscar_dados_completos.clear()
+            st.rerun()
 
     with st.spinner("Sincronizando dados do Notion..."):
         dados_raw = auto.buscar_dados_completos()
@@ -114,6 +120,12 @@ if menu == "🏠 Dashboard":
         st.warning("⚠️ Sem dados. Verifique as credenciais do Notion ou faça uma importação primeiro.")
     else:
         df_dash = pd.DataFrame(dados_raw)
+
+        # DEBUG (apenas se necessário ver as colunas)
+        with st.expander("🔍 Depuração de Dados", expanded=False):
+            st.write("Colunas detetadas:", df_dash.columns.tolist())
+            st.write("Amostra de dados (primeiras 3 linhas):")
+            st.write(df_dash.head(3))
 
         # ── Cálculos de Inteligência ──
         total       = len(df_dash)
