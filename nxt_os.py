@@ -79,7 +79,7 @@ with st.sidebar:
     st.divider()
     menu = st.radio(
         "Menu Principal",
-        ["🏠 Dashboard", "📥 Importação", "🎯 Disparos", "📊 Métricas"],
+        ["🏠 Dashboard", "📥 Importação", "🎯 Disparos", "🔁 Follow Up", "📊 Métricas"],
         index=1
     )
 
@@ -417,6 +417,130 @@ elif menu == "🎯 Disparos":
                         st.rerun()
                 
                 st.divider()
+
+# ───────────────────────────── MÓDULO: FOLLOW UP ─────────────────────────────
+elif menu == "🔁 Follow Up":
+    st.title("🔁 Esteira de Follow Up")
+    st.caption("Acompanhamento inteligente com transições automáticas por prazo.")
+
+    OPCOES_RESPOSTA = [
+        "Aguardando...",
+        "Respondeu",
+        "Reunião agendada",
+        "Aguardando retorno",
+        "Não interessado",
+        "Convertido",
+    ]
+
+    if st.button("🔄 Atualizar Esteira"):
+        st.session_state.pop("leads_follow_up", None)
+        st.rerun()
+
+    if "leads_follow_up" not in st.session_state:
+        with st.spinner("Carregando esteira do Notion..."):
+            st.session_state.leads_follow_up = auto.buscar_leads_follow_up()
+
+    leads_fu = st.session_state.leads_follow_up
+    hoje = datetime.now().date()
+
+    # ── Processa regras automáticas antes de renderizar ──
+    leads_para_exibir = []
+    auto_transicionados = 0
+
+    for lead in leads_fu:
+        status_atual = lead.get("status", "")
+        pc_raw       = lead.get("primeiro_contato")
+
+        if pc_raw:
+            try:
+                data_pc = datetime.strptime(pc_raw[:10], "%Y-%m-%d").date()
+                dias_passados = (hoje - data_pc).days
+            except Exception:
+                dias_passados = 0
+        else:
+            dias_passados = 0
+
+        # Regra 14 dias: Follow up → Arquivar automaticamente
+        if status_atual == "Follow up" and dias_passados >= 14:
+            if auto.atualizar_status_manual(lead["id"], "Arquivar"):
+                auto_transicionados += 1
+            continue  # Oculta da tela
+
+        # Regra 5 dias: Tentativa de contato → Follow up automaticamente
+        if status_atual == "Tentativa de contato" and dias_passados >= 5:
+            if auto.atualizar_status_manual(lead["id"], "Follow up"):
+                lead["status"] = "Follow up"  # Atualiza localmente para exibir correto
+                auto_transicionados += 1
+
+        leads_para_exibir.append((lead, dias_passados))
+
+    if auto_transicionados > 0:
+        st.info(f"⚙️ {auto_transicionados} lead(s) transição automática aplicada.")
+
+    if not leads_para_exibir:
+        st.success("✅ Nenhum lead pendente na esteira. Tudo em dia!")
+    else:
+        # Métricas rápidas
+        tentativas = sum(1 for l, _ in leads_para_exibir if l["status"] == "Tentativa de contato")
+        followups  = sum(1 for l, _ in leads_para_exibir if l["status"] == "Follow up")
+        mc1, mc2 = st.columns(2)
+        mc1.metric("Tentativas de Contato", tentativas)
+        mc2.metric("Em Follow Up",          followups)
+        st.divider()
+
+        for lead, dias_passados in leads_para_exibir:
+            status_cor = "#e67e22" if lead["status"] == "Follow up" else "#3498db"
+            urgencia   = "🔴" if dias_passados >= 10 else ("🟡" if dias_passados >= 5 else "🟢")
+
+            st.markdown(f"""
+                <div style="background:#1e1e1e;padding:16px;border-radius:10px;
+                            border-left:4px solid {status_cor};margin-bottom:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:1.1em;font-weight:bold;color:#fff;">{urgencia} {lead['empresa']}</span>
+                        <span style="background:{status_cor};color:#fff;padding:3px 10px;
+                               border-radius:4px;font-size:0.8em;">{lead['status']}</span>
+                    </div>
+                    <div style="color:#aaa;font-size:0.85em;margin-top:6px;">
+                        📅 Primeiro contato: <b>{lead['primeiro_contato'] or 'Não registrado'}</b>
+                        &nbsp;·&nbsp; ⏱ {dias_passados} dia(s) atrás
+                    </div>
+                    <div style="color:#bbb;font-size:0.85em;margin-top:8px;font-style:italic;">
+                        {lead['diagnostico'][:180] + '...' if lead['diagnostico'] and len(lead['diagnostico']) > 180 else lead['diagnostico'] or 'Diagnóstico não disponível.'}
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+            col_wa, col_sel = st.columns([1, 2])
+
+            with col_wa:
+                if lead["link_wa"]:
+                    st.link_button("📲 WhatsApp", lead["link_wa"],
+                                   help="Abre o WhatsApp Web/App.")
+                else:
+                    st.button("📲 Sem Tel.", disabled=True, key=f"fu_notel_{lead['id']}")
+
+            with col_sel:
+                escolha = st.selectbox(
+                    "Atualizar status",
+                    options=OPCOES_RESPOSTA,
+                    index=0,
+                    key=f"fu_sel_{lead['id']}",
+                    label_visibility="collapsed",
+                )
+                if escolha != "Aguardando...":
+                    if auto.atualizar_status_manual(lead["id"], escolha):
+                        st.toast(f"✅ {lead['empresa']} → '{escolha}'")
+                        time.sleep(0.4)
+                        # Remove da lista local e recarrega
+                        st.session_state.leads_follow_up = [
+                            l for l in st.session_state.leads_follow_up
+                            if l["id"] != lead["id"]
+                        ]
+                        st.rerun()
+                    else:
+                        st.error("Erro ao atualizar no Notion.")
+
+            st.divider()
 
 # ───────────────────────────── MÓDULO: MÉTRICAS ───────────────────────────────
 elif menu == "📊 Métricas":

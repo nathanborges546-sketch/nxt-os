@@ -4,7 +4,7 @@ import pandas as pd
 import requests
 import logging
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import quote
 from dotenv import load_dotenv
 
@@ -384,21 +384,127 @@ def buscar_leads_notion():
         return []
 
 def atualizar_status_disparo(page_id):
-    """Atualiza o lead no Notion após o disparo: Disparo='Realizado', Status='Contactado'"""
+    """Atualiza o lead após o disparo:
+    - Disparo            → 'Realizado'
+    - Status de Contato  → 'Tentativa de contato'
+    - Primeiro Contato   → data de HOJE (ISO 8601)
+    """
     url = f"https://api.notion.com/v1/pages/{page_id}"
-    
+    hoje = datetime.now().strftime("%Y-%m-%d")
+
     payload = {
         "properties": {
-            "Disparo": { "select": { "name": "Realizado" } },
-            "Status de Contato": { "status": { "name": "Tentativa de contato" } }
+            "Disparo":           { "select": { "name": "Realizado" } },
+            "Status de Contato": { "status": { "name": "Tentativa de contato" } },
+            "Primeiro Contato":  { "date":   { "start": hoje } }
         }
     }
-    
+
     try:
         res = requests.patch(url, headers=HEADERS, json=payload)
-        return res.status_code in [200, 202]
+        if res.status_code not in [200, 202]:
+            try:
+                body = res.json()
+                log(f"❌ atualizar_status_disparo: HTTP {res.status_code} | {body.get('message')} | path: {body.get('path')}", "error")
+            except Exception:
+                log(f"❌ atualizar_status_disparo: HTTP {res.status_code}", "error")
+            return False
+        return True
     except Exception as e:
         log(f"❌ Erro ao atualizar status: {e}", "error")
+        return False
+
+
+def calcular_proximo_dia_util(data_base: datetime, dias: int) -> datetime:
+    """Soma `dias` corridos a data_base e, se cair em fim de semana, avança para segunda."""
+    resultado = data_base + timedelta(days=dias)
+    # 5 = sábado, 6 = domingo
+    if resultado.weekday() == 5:   # sábado → segunda
+        resultado += timedelta(days=2)
+    elif resultado.weekday() == 6: # domingo → segunda
+        resultado += timedelta(days=1)
+    return resultado
+
+
+def buscar_leads_follow_up():
+    """Busca leads onde Status = 'Tentativa de contato' OU 'Follow up'.
+    Retorna lista com campos para a esteira de acompanhamento.
+    """
+    url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+
+    query = {
+        "filter": {
+            "or": [
+                { "property": "Status de Contato", "status": { "equals": "Tentativa de contato" } },
+                { "property": "Status de Contato", "status": { "equals": "Follow up" } }
+            ]
+        }
+    }
+
+    try:
+        res = requests.post(url, headers=HEADERS, json=query)
+        if res.status_code != 200:
+            log(f"❌ buscar_leads_follow_up: HTTP {res.status_code}", "error")
+            return []
+
+        leads = []
+        for r in res.json().get("results", []):
+            props = r.get("properties", {})
+
+            def get_text(prop_name):
+                rt = props.get(prop_name, {}).get("rich_text", [])
+                return rt[0]["text"]["content"] if rt else ""
+
+            def get_title():
+                t = props.get("Empresa", {}).get("title", [])
+                return t[0]["text"]["content"] if t else "Sem Nome"
+
+            def get_status():
+                return props.get("Status de Contato", {}).get("status", {}).get("name", "")
+
+            def get_date(field):
+                d = props.get(field, {}).get("date")
+                return d["start"] if d else None
+
+            leads.append({
+                "id":              r["id"],
+                "empresa":         get_title(),
+                "site":            props.get("Site Atual", {}).get("url", ""),
+                "telefone":        props.get("Telefone", {}).get("phone_number", ""),
+                "diagnostico":     get_text("Diagnóstico Gemini"),
+                "link_wa":         props.get("Link WhatsApp", {}).get("url", ""),
+                "status":          get_status(),
+                "primeiro_contato":get_date("Primeiro Contato"),
+            })
+        return leads
+
+    except Exception as e:
+        log(f"❌ Exceção em buscar_leads_follow_up: {e}", "error")
+        return []
+
+
+def atualizar_status_manual(page_id: str, novo_status: str) -> bool:
+    """Muda 'Status de Contato' para qualquer valor válido no Notion.
+    Usado para transições rápidas na esteira de Follow-up.
+    """
+    url = f"https://api.notion.com/v1/pages/{page_id}"
+    payload = {
+        "properties": {
+            "Status de Contato": { "status": { "name": novo_status } }
+        }
+    }
+    try:
+        res = requests.patch(url, headers=HEADERS, json=payload)
+        if res.status_code not in [200, 202]:
+            try:
+                body = res.json()
+                log(f"❌ atualizar_status_manual ({novo_status}): HTTP {res.status_code} | {body.get('message')}", "error")
+            except Exception:
+                pass
+            return False
+        return True
+    except Exception as e:
+        log(f"❌ Erro em atualizar_status_manual: {e}", "error")
         return False
 
 # --- 5. LOOP PRINCIPAL ---
