@@ -217,17 +217,19 @@ elif menu == "📥 Importação":
     st.divider()
 
     # 🧠 MAPEAMENTO INTELIGENTE
-    if st.button("🧠 Aplicar Mapeamento Inteligente", use_container_width=True, help="Analisa o conteúdo das colunas e mapeia automaticamente para o Notion."):
+    if st.button("🧠 Aplicar Mapeamento Inteligente", use_container_width=True, help="Analisa o conteúdo, renomeia automaticamente e exclui colunas inúteis."):
         map_detectado = auto.identificar_colunas_por_conteudo(df)
         if map_detectado:
-            # Aplica o mapeamento e limpa obsoletas
+            # 1. Aplica o mapeamento e já limpa colunas obsoletas automaticamente
             df_clean = auto.limpar_colunas_obsoletas(df, map_detectado)
+            
+            # 2. Atualiza o estado da sessão com a base já purificada verticalmente
             st.session_state.imp_df_original = df_clean
             
-            # Feedback para o usuário
-            cols_id = list(map_detectado.values())
-            st.success(f"✅ {len(cols_id)} colunas identificadas: {', '.join(cols_id)}")
-            st.info(f"🗑️ {len(df.columns) - len(df_clean.columns)} colunas inúteis removidas.")
+            # 3. Feedback detalhado
+            cols_id = list(set(map_detectado.values()))
+            st.success(f"✅ Mapeamento concluído! {len(df_clean.columns)} colunas essenciais mantidas.")
+            st.info(f"📋 Colunas identificadas: {', '.join(cols_id)}")
             time.sleep(2)
             st.rerun()
         else:
@@ -451,7 +453,9 @@ elif menu == "📥 Importação":
     col_exp, col_notion = st.columns(2)
 
     with col_exp:
-        csv_out = df_final.to_csv(index=False, encoding="utf-8-sig")
+        # Gera o DataFrame final processando a cascata para o CSV
+        df_csv = auto.processar_df_final(df_final, is_outscraper=is_outscraper)
+        csv_out = df_csv.to_csv(index=False, encoding="utf-8-sig")
         st.download_button("⬇️ Baixar CSV Purificado", data=csv_out, file_name="leads_purificados.csv", mime="text/csv", use_container_width=True)
 
     with col_notion:

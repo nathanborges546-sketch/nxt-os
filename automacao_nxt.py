@@ -154,70 +154,121 @@ HEADERS = {
 # ── NOVAS FUNÇÕES DE MAPEAMENTO INTELIGENTE ──
 
 def identificar_colunas_por_conteudo(df):
-    """Analisa o conteúdo das colunas para mapear automaticamente para o formato Notion."""
+    """Analisa o conteúdo das colunas para mapear automaticamente para o formato Notion.
+    Lógica Heurística v2: Prioriza dados específicos (Redes Sociais) antes de genéricos (Sites).
+    """
     mapeamento = {}
     colunas_df = df.columns
-    sample = df.head(10).astype(str)
+    sample = df.head(10).fillna("").astype(str)
     
     termos_negocio = ['agência', 'marketing', 'social media', 'imobiliária', 'consultoria', 'advocacia', 'estética', 'clínica']
+    termos_localizacao = ['rua', 'av.', 'brasil', 'city', 'address', 'location', 'cidade', 'endereço', 'localização']
     
     for col in colunas_df:
-        # Garante que todos os itens sejam strings para o join não falhar com NaNs (floats)
-        content = " ".join([str(x) for x in sample[col].tolist()]).lower()
+        # Garante que todos os itens sejam strings para o join não falhar
+        amostra = [str(x).lower() for x in sample[col].tolist()]
+        content = " ".join(amostra)
         col_lower = col.lower()
         
-        # 1. Site Atual
-        if any(x in col_lower for x in ['link', 'website', 'site_url']) or content.startswith('http'):
-            mapeamento[col] = "Site Atual"
-        
-        # 2. Instagram
-        elif 'instagram.com' in content:
+        # 1. Redes Sociais (Específicos primeiro)
+        if 'instagram.com' in content:
             mapeamento[col] = "Instagram"
-            
-        # 3. LinkedIn
-        elif 'linkedin.com/company' in content or 'linkedin.com/in' in content:
+        elif 'linkedin.com' in content:
             mapeamento[col] = "LinkedIn"
+        elif 'facebook.com' in content:
+            mapeamento[col] = "Facebook"
             
-        # 4. E-mail
+        # 2. Contatos
         elif '@' in content and '.' in content:
             mapeamento[col] = "E-mail"
-            
-        # 5. Telefone
-        elif any(c.isdigit() for c in content) and len("".join(filter(str.isdigit, content))) >= 8:
-            if "phone" in col_lower or "tel" in col_lower or "whatsapp" in col_lower:
+        elif any(re.search(r'\d{8,}', "".join(filter(str.isdigit, str(x)))) for x in amostra):
+            # Prioriza Telefone se o nome da coluna ajudar ou se tiver muitos dígitos
+            if any(x in col_lower for x in ["phone", "tel", "whatsapp", "contato", "mobile"]):
                 mapeamento[col] = "Telefone"
                 
-        # 6. Tipo de Negócio
+        # 3. Negócio e Localização
         elif any(t in content for t in termos_negocio) or col_lower in ['category', 'categoria', 'industry']:
             mapeamento[col] = "Tipo de Negócio"
-            
-        # 7. Empresa
-        elif col_lower in ['name', 'company_name', 'title', 'empresa', 'nome']:
-            mapeamento[col] = "Empresa"
-
-        # 8. Localização
-        elif col_lower in ['city', 'address', 'location', 'cidade', 'endereço', 'localização']:
+        elif any(l in content for l in termos_localizacao) or col_lower in ['city', 'address', 'location', 'cidade', 'endereço', 'localização']:
             mapeamento[col] = "Localização"
-
-        # 9. Decisor
+            
+        # 4. Site Atual (O que sobrou que é link)
+        elif any(x in col_lower for x in ['link', 'website', 'site_url']) or content.startswith('http'):
+            mapeamento[col] = "Site Atual"
+            
+        # 5. Nome da Empresa (Baseado no nome da coluna)
+        elif col_lower in ['name', 'company_name', 'title', 'empresa', 'nome', 'company']:
+            mapeamento[col] = "Empresa"
+            
+        # 6. Decisor
         elif any(x in col_lower for x in ['owner', 'founder', 'ceo', 'decision_maker', 'decisor']):
             mapeamento[col] = "Decisor"
 
     return mapeamento
 
 def limpar_colunas_obsoletas(df, mapeamento_efetuado):
-    """Remove colunas que não foram mapeadas para o formato oficial."""
+    """Remove colunas que não foram mapeadas para o formato oficial e consolida duplicados."""
     colunas_oficiais = [
         "Empresa", "Site Atual", "E-mail", "Telefone", 
-        "LinkedIn", "Instagram", "Tipo de Negócio", "Localização", "Decisor"
+        "LinkedIn", "Instagram", "Facebook", "Tipo de Negócio", "Localização", "Decisor"
     ]
     
     # Renomeia as colunas detectadas
-    df_renamed = df.rename(columns=mapeamento_efetuado)
+    df_temp = df.copy()
     
-    # Mantém apenas as que estão na lista oficial
-    cols_to_keep = [c for c in df_renamed.columns if c in colunas_oficiais]
-    return df_renamed[cols_to_keep].copy()
+    # Se houver múltiplas colunas mapeadas para o mesmo nome (ex: dois 'E-mails'), 
+    # precisamos consolidar antes de filtrar
+    final_cols = {}
+    for col_orig, col_notion in mapeamento_efetuado.items():
+        if col_notion not in final_cols:
+            final_cols[col_notion] = df_temp[col_orig]
+        else:
+            # Consolida (coalesce) valores faltantes
+            final_cols[col_notion] = final_cols[col_notion].combine_first(df_temp[col_orig])
+            
+    df_consolidated = pd.DataFrame(final_cols)
+    
+    # Mantém apenas as oficiais que foram realmente encontradas
+    cols_to_keep = [c for c in colunas_oficiais if c in df_consolidated.columns]
+    return df_consolidated[cols_to_keep].copy()
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+def processar_df_final(df, is_outscraper=False):
+    """Aplica a lógica de cascata e purificação final em todo o DataFrame para exportação."""
+    leads_validados = []
+    
+    for _, row in df.iterrows():
+        # Se for Outscraper, aplica cascata
+        contato_cons = {}
+        if is_outscraper:
+            contato_cons = consolidar_contatos_outscraper(row)
+            
+            # Pula se não tiver contato mínimo validado
+            if not contato_cons.get("email") and not contato_cons.get("telefone"):
+                continue
+        
+        # Constrói o registro limpo
+        empresa = buscar_dado(row, 'empresa')
+        site    = buscar_dado(row, 'site')
+        
+        lead_limpo = {
+            'Empresa':          empresa,
+            'Site Atual':       site,
+            'Telefone':         contato_cons.get("telefone") if is_outscraper else buscar_dado(row, 'telefone'),
+            'E-mail':           contato_cons.get("email") if is_outscraper else buscar_dado(row, 'email'),
+            'LinkedIn':         contato_cons.get("linkedin") if is_outscraper else buscar_dado(row, 'linkedin'),
+            'Instagram':        contato_cons.get("instagram") if is_outscraper else buscar_dado(row, 'instagram'),
+            'Facebook':         contato_cons.get("facebook") if is_outscraper else buscar_dado(row, 'facebook'),
+            'Decisor':          contato_cons.get("decisor") if is_outscraper else buscar_dado(row, 'decisor'),
+            'Tipo de Negócio':  categorizar_negocio(buscar_dado(row, 'tipo_negocio')),
+            'Localização':      buscar_dado(row, 'localizacao'),
+            'Avaliação':        buscar_dado(row, 'avaliacao'),
+            'RID':              gerar_rid(site, empresa)
+        }
+        leads_validados.append(lead_limpo)
+            
+    return pd.DataFrame(leads_validados)
 
 # ─────────────────────────────────────────────────────────────────────────────
 
