@@ -39,6 +39,67 @@ try:
 except Exception:
     pass  # Streamlit não disponível (ex: script CLI)
 
+# ── Cache de dados para Dashboard/Métricas ──────────────────────────────────
+try:
+    from streamlit import cache_data as _cache_data
+
+    @_cache_data(ttl=3600)
+    def buscar_dados_completos():
+        """Busca TODOS os registros do Notion com paginação.
+        Cache de 1 hora via @st.cache_data — evita chamadas repetidas à API.
+        Retorna lista de dicts com campos essenciais para o Dashboard.
+        """
+        url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+        headers = {
+            "Authorization": f"Bearer {NOTION_TOKEN}",
+            "Content-Type": "application/json",
+            "Notion-Version": "2022-06-28"
+        }
+        all_results, cursor = [], None
+
+        while True:
+            body = {"page_size": 100}
+            if cursor:
+                body["start_cursor"] = cursor
+
+            res = requests.post(url, headers=headers, json=body)
+            if res.status_code != 200:
+                break
+
+            data = res.json()
+            for r in data.get("results", []):
+                props = r.get("properties", {})
+
+                titulo = props.get("Empresa", {}).get("title", [])
+                empresa = titulo[0]["text"]["content"] if titulo else "Sem Nome"
+
+                status_obj = props.get("Status de Contato", {}).get("status", {})
+                status = status_obj.get("name", "") if status_obj else ""
+
+                tipo_obj = props.get("Tipo de Negócio", {}).get("select", {})
+                tipo = tipo_obj.get("name", "Outros") if tipo_obj else "Outros"
+
+                avaliacao = props.get("Avaliação", {}).get("number") or 0.0
+
+                all_results.append({
+                    "Empresa":           empresa,
+                    "Status de Contato": status,
+                    "Tipo de Negócio":   tipo,
+                    "Avaliação":         float(avaliacao),
+                })
+
+            if not data.get("has_more"):
+                break
+            cursor = data.get("next_cursor")
+
+        return all_results
+
+except Exception:
+    # Fallback para execução CLI sem Streamlit instalado
+    def buscar_dados_completos():
+        return []
+
+
 # Inicialização segura do Gemini
 if GEMINI_KEY:
     client = genai.Client(api_key=GEMINI_KEY)

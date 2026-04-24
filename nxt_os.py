@@ -105,13 +105,48 @@ def _find_status_candidate(contact_col: str, all_cols: list) -> int:
 
 # ───────────────────────────── MÓDULO: DASHBOARD ─────────────────────────────
 if menu == "🏠 Dashboard":
-    st.title("🚀 NXT OS Dashboard")
-    st.write("Bem-vindo ao sistema operacional da NXT. Utilize o menu lateral para gerenciar seus leads.")
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Leads Totais", "1.240", "+12%")
-    col2.metric("Conversões (Mês)", "45", "+5%")
-    col3.metric("Taxa de Resposta", "18%", "-2%")
+    st.title("🚀 NXT OS — Command Center")
+
+    with st.spinner("Sincronizando dados do Notion..."):
+        dados_raw = auto.buscar_dados_completos()
+
+    if not dados_raw:
+        st.warning("⚠️ Sem dados. Verifique as credenciais do Notion ou faça uma importação primeiro.")
+    else:
+        df_dash = pd.DataFrame(dados_raw)
+
+        total       = len(df_dash)
+        convertidos = int((df_dash["Status de Contato"] == "Convertido").sum())
+        taxa        = f"{(convertidos / total * 100):.1f}%" if total > 0 else "0%"
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("📊 Total de Leads",    total)
+        c2.metric("✅ Convertidos",        convertidos)
+        c3.metric("📈 Taxa de Conversão", taxa)
+
+        st.divider()
+
+        # ── Gráfico de Distribuição por Status ──
+        st.subheader("📊 Distribuição por Status de Contato")
+        status_counts = (
+            df_dash["Status de Contato"]
+            .value_counts()
+            .rename_axis("Status")
+            .reset_index(name="Leads")
+        )
+        st.bar_chart(status_counts.set_index("Status"), use_container_width=True)
+
+        st.divider()
+
+        # ── Top 5 Status em tabela rápida ──
+        col_t, col_s = st.columns([1, 1])
+        with col_t:
+            st.markdown("**Top Tipos de Negócio**")
+            tipo_top = df_dash["Tipo de Negócio"].value_counts().head(5)
+            st.dataframe(tipo_top.rename("Leads"), use_container_width=True)
+        with col_s:
+            st.markdown("**Funil de Status**")
+            st.dataframe(status_counts.set_index("Status"), use_container_width=True)
 
 
 # ───────────────────────────── MÓDULO: IMPORTAÇÃO ─────────────────────────────
@@ -559,7 +594,85 @@ elif menu == "🔁 Follow Up":
 # ───────────────────────────── MÓDULO: MÉTRICAS ───────────────────────────────
 elif menu == "📊 Métricas":
     st.title("📊 Análise de Performance")
-    st.info("Em breve: Gráficos de funil e performance de disparos.")
+
+    col_sync, _ = st.columns([1, 3])
+    with col_sync:
+        if st.button("🔄 Sincronizar Agora", help="Força nova leitura do Notion (limpa cache de 1h)"):
+            auto.buscar_dados_completos.clear()
+            st.toast("Cache limpo! Recarregando...")
+            st.rerun()
+
+    with st.spinner("Carregando dados..."):
+        dados_raw = auto.buscar_dados_completos()
+
+    if not dados_raw:
+        st.warning("⚠️ Nenhum dado encontrado. Faça uma importação primeiro.")
+    else:
+        df_met = pd.DataFrame(dados_raw)
+
+        # ── Tabela Interativa ──
+        st.subheader("📄 Tabela de Leads")
+        st.dataframe(
+            df_met,
+            use_container_width=True,
+            column_config={
+                "Empresa":           st.column_config.TextColumn("Empresa"),
+                "Status de Contato": st.column_config.TextColumn("Status"),
+                "Tipo de Negócio":  st.column_config.TextColumn("Tipo de Negócio"),
+                "Avaliação":        st.column_config.NumberColumn(
+                    "Avaliação ★",
+                    format="%.1f ★",
+                    min_value=0,
+                    max_value=5,
+                ),
+            },
+            hide_index=True,
+        )
+
+        st.divider()
+
+        g1, g2 = st.columns(2)
+
+        # ── Gráfico por Tipo de Negócio ──
+        with g1:
+            st.subheader("🏢 Leads por Tipo de Negócio")
+            tipo_counts = (
+                df_met["Tipo de Negócio"]
+                .value_counts()
+                .rename_axis("Tipo")
+                .reset_index(name="Leads")
+            )
+            st.bar_chart(
+                tipo_counts.set_index("Tipo"),
+                use_container_width=True,
+            )
+
+        # ── Gráfico por Status ──
+        with g2:
+            st.subheader("📊 Leads por Status")
+            status_counts = (
+                df_met["Status de Contato"]
+                .value_counts()
+                .rename_axis("Status")
+                .reset_index(name="Leads")
+            )
+            st.bar_chart(
+                status_counts.set_index("Status"),
+                use_container_width=True,
+            )
+
+        st.divider()
+
+        # ── Avaliação Média por Tipo ──
+        st.subheader("⭐ Avaliação Média por Segmento")
+        avg_rating = (
+            df_met.groupby("Tipo de Negócio")["Avaliação"]
+            .mean()
+            .sort_values(ascending=False)
+            .round(2)
+            .rename("Média")
+        )
+        st.bar_chart(avg_rating, use_container_width=True)
 
 st.sidebar.divider()
 st.sidebar.caption("NXT OS — Powered by Gemini 2.0 Flash")
