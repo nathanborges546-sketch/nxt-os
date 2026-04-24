@@ -162,7 +162,8 @@ def identificar_colunas_por_conteudo(df):
     termos_negocio = ['agência', 'marketing', 'social media', 'imobiliária', 'consultoria', 'advocacia', 'estética', 'clínica']
     
     for col in colunas_df:
-        content = " ".join(sample[col].tolist()).lower()
+        # Garante que todos os itens sejam strings para o join não falhar com NaNs (floats)
+        content = " ".join([str(x) for x in sample[col].tolist()]).lower()
         col_lower = col.lower()
         
         # 1. Site Atual
