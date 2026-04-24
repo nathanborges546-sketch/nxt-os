@@ -83,18 +83,9 @@ with st.sidebar:
         index=1
     )
 
-# ───────────────────────────── MÓDULO: DASHBOARD ─────────────────────────────
-if menu == "🏠 Dashboard":
-    st.title("🚀 NXT OS Dashboard")
-    st.write("Bem-vindo ao sistema operacional da NXT. Utilize o menu lateral para gerenciar seus leads.")
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Leads Totais", "1.240", "+12%")
-    col2.metric("Conversões (Mês)", "45", "+5%")
-    col3.metric("Taxa de Resposta", "18%", "-2%")
-
-# ─── HELPERS DO PURIFIER (portados de nxt_purifier.py) ───
+# ─── HELPERS DO PURIFIER ────────────────────────────────────────────────────
 def _find_status_candidate(contact_col: str, all_cols: list) -> int:
+    """Auto-sugestão de coluna de status para o Smart Erase."""
     contact_lower = contact_col.lower()
     num_match = re.search(r"(\d+)", contact_lower)
     suffix = num_match.group(1) if num_match else None
@@ -106,9 +97,22 @@ def _find_status_candidate(contact_col: str, all_cols: list) -> int:
     ]:
         for idx, col in enumerate(all_cols):
             col_lower = col.lower()
-            if col_lower == contact_lower: continue
-            if priority_fn(col_lower): return idx
+            if col_lower == contact_lower:
+                continue
+            if priority_fn(col_lower):
+                return idx
     return 0
+
+# ───────────────────────────── MÓDULO: DASHBOARD ─────────────────────────────
+if menu == "🏠 Dashboard":
+    st.title("🚀 NXT OS Dashboard")
+    st.write("Bem-vindo ao sistema operacional da NXT. Utilize o menu lateral para gerenciar seus leads.")
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Leads Totais", "1.240", "+12%")
+    col2.metric("Conversões (Mês)", "45", "+5%")
+    col3.metric("Taxa de Resposta", "18%", "-2%")
+
 
 # ───────────────────────────── MÓDULO: IMPORTAÇÃO ─────────────────────────────
 elif menu == "📥 Importação":
