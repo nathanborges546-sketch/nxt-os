@@ -115,14 +115,38 @@ if menu == "🏠 Dashboard":
     else:
         df_dash = pd.DataFrame(dados_raw)
 
+        # ── Cálculos de Inteligência ──
         total       = len(df_dash)
         convertidos = int((df_dash["Status de Contato"] == "Convertido").sum())
-        taxa        = f"{(convertidos / total * 100):.1f}%" if total > 0 else "0%"
+        taxa_conv   = f"{(convertidos / total * 100):.1f}%" if total > 0 else "0.0%"
 
+        # Capital em Negociação
+        status_negocio = ['Aguardando retorno', 'Respondeu', 'Reunião agendada']
+        capital_neg = df_dash[df_dash["Status de Contato"].isin(status_negocio)]["Valor Potencial"].sum()
+
+        # Taxa de Decisores
+        total_ativos = total # Consideramos todos na base como ativos para esta métrica
+        decisores_sim = int((df_dash["Decisor"] == "Sim").sum())
+        taxa_decisores = f"{(decisores_sim / total_ativos * 100):.1f}%" if total_ativos > 0 else "0.0%"
+
+        # Taxa de Resposta
+        # Resposta = qualquer status que não seja "Não contactado", "Tentativa de contato" ou vazio
+        status_ignorados = ["Não contactado", "Tentativa de contato", "", "Arquivar"]
+        respostas = int((~df_dash["Status de Contato"].isin(status_ignorados)).sum())
+        taxa_resposta = f"{(respostas / total * 100):.1f}%" if total > 0 else "0.0%"
+
+        # ── Linha 1: Métricas de Conversão ──
         c1, c2, c3 = st.columns(3)
-        c1.metric("📊 Total de Leads",    total)
-        c2.metric("✅ Convertidos",        convertidos)
-        c3.metric("📈 Taxa de Conversão", taxa)
+        c1.metric("📊 Total de Leads", total)
+        c2.metric("✅ Convertidos", convertidos)
+        c3.metric("📈 Taxa de Conversão", taxa_conv)
+
+        # ── Linha 2: Inteligência Comercial ──
+        st.divider()
+        c4, c5, c6 = st.columns(3)
+        c4.metric("💰 Capital em Negociação", f"R$ {capital_neg:,.2f}")
+        c5.metric("⚖️ Taxa de Decisores", taxa_decisores)
+        c6.metric("💬 Taxa de Resposta", taxa_resposta)
 
         st.divider()
 
@@ -610,27 +634,7 @@ elif menu == "📊 Métricas":
     else:
         df_met = pd.DataFrame(dados_raw)
 
-        # ── Tabela Interativa ──
-        st.subheader("📄 Tabela de Leads")
-        st.dataframe(
-            df_met,
-            use_container_width=True,
-            column_config={
-                "Empresa":           st.column_config.TextColumn("Empresa"),
-                "Status de Contato": st.column_config.TextColumn("Status"),
-                "Tipo de Negócio":  st.column_config.TextColumn("Tipo de Negócio"),
-                "Avaliação":        st.column_config.NumberColumn(
-                    "Avaliação ★",
-                    format="%.1f ★",
-                    min_value=0,
-                    max_value=5,
-                ),
-            },
-            hide_index=True,
-        )
-
-        st.divider()
-
+        # ── Linha de Gráficos Principais ──
         g1, g2 = st.columns(2)
 
         # ── Gráfico por Tipo de Negócio ──
@@ -642,10 +646,7 @@ elif menu == "📊 Métricas":
                 .rename_axis("Tipo")
                 .reset_index(name="Leads")
             )
-            st.bar_chart(
-                tipo_counts.set_index("Tipo"),
-                use_container_width=True,
-            )
+            st.bar_chart(tipo_counts.set_index("Tipo"), use_container_width=True)
 
         # ── Gráfico por Status ──
         with g2:
@@ -656,10 +657,31 @@ elif menu == "📊 Métricas":
                 .rename_axis("Status")
                 .reset_index(name="Leads")
             )
-            st.bar_chart(
-                status_counts.set_index("Status"),
-                use_container_width=True,
-            )
+            st.bar_chart(status_counts.set_index("Status"), use_container_width=True)
+
+        st.divider()
+
+        # ── Inteligência de Objeções e Canais ──
+        g3, g4 = st.columns(2)
+
+        with g3:
+            st.subheader("🛡️ Gráfico de Objeções (Motivo)")
+            # Filtrar motivos vazios para o gráfico ser limpo
+            df_motivo = df_met[df_met["Motivo"] != ""].copy()
+            if not df_motivo.empty:
+                motivo_counts = df_motivo["Motivo"].value_counts()
+                st.bar_chart(motivo_counts, use_container_width=True)
+            else:
+                st.caption("Sem dados de motivos registrados.")
+
+        with g4:
+            st.subheader("📡 Canais de Prospecção")
+            df_canal = df_met[df_met["Meio de Contato"] != ""].copy()
+            if not df_canal.empty:
+                canal_counts = df_canal["Meio de Contato"].value_counts()
+                st.bar_chart(canal_counts, use_container_width=True)
+            else:
+                st.caption("Sem dados de canais registrados.")
 
         st.divider()
 

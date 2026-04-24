@@ -57,6 +57,10 @@ try:
         }
         all_results, cursor = [], None
 
+        def _get_sel(p, name):
+            obj = p.get(name, {}).get("select") or {}
+            return obj.get("name", "")
+
         while True:
             body = {"page_size": 100}
             if cursor:
@@ -76,6 +80,18 @@ try:
                 status_obj = props.get("Status de Contato", {}).get("status", {})
                 status = status_obj.get("name", "") if status_obj else ""
 
+                # Novos campos solicitados
+                decisor = _get_sel(props, "Decisor")
+                meio    = _get_sel(props, "Meio de Contato")
+                motivo  = _get_sel(props, "Motivo")
+                
+                # Valor Potencial (Number)
+                valor_raw = props.get("Valor Potencial", {}).get("number")
+                try:
+                    valor = float(valor_raw) if valor_raw is not None else 0.0
+                except:
+                    valor = 0.0
+
                 tipo_obj = props.get("Tipo de Negócio", {}).get("select", {})
                 tipo = tipo_obj.get("name", "Outros") if tipo_obj else "Outros"
 
@@ -86,6 +102,10 @@ try:
                     "Status de Contato": status,
                     "Tipo de Negócio":   tipo,
                     "Avaliação":         float(avaliacao),
+                    "Decisor":           decisor,
+                    "Meio de Contato":   meio,
+                    "Motivo":            motivo,
+                    "Valor Potencial":   valor
                 })
 
             if not data.get("has_more"):
