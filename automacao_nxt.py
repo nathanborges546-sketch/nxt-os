@@ -441,41 +441,42 @@ def buscar_leads_follow_up():
         }
     }
 
+    # Helpers definidos FORA do loop — evita closure bug do Python
+    def _get_text(props, prop_name):
+        rt = props.get(prop_name, {}).get("rich_text", [])
+        return rt[0]["text"]["content"] if rt else ""
+
+    def _get_title(props):
+        t = props.get("Empresa", {}).get("title", [])
+        return t[0]["text"]["content"] if t else "Sem Nome"
+
+    def _get_status(props):
+        return props.get("Status de Contato", {}).get("status", {}).get("name", "")
+
+    def _get_date(props, field):
+        d = props.get(field, {}).get("date")
+        return d["start"] if d else None
+
     try:
         res = requests.post(url, headers=HEADERS, json=query)
         if res.status_code != 200:
-            log(f"❌ buscar_leads_follow_up: HTTP {res.status_code}", "error")
+            log(f"❌ buscar_leads_follow_up: HTTP {res.status_code} — {res.text[:200]}", "error")
             return []
 
         leads = []
         for r in res.json().get("results", []):
             props = r.get("properties", {})
-
-            def get_text(prop_name):
-                rt = props.get(prop_name, {}).get("rich_text", [])
-                return rt[0]["text"]["content"] if rt else ""
-
-            def get_title():
-                t = props.get("Empresa", {}).get("title", [])
-                return t[0]["text"]["content"] if t else "Sem Nome"
-
-            def get_status():
-                return props.get("Status de Contato", {}).get("status", {}).get("name", "")
-
-            def get_date(field):
-                d = props.get(field, {}).get("date")
-                return d["start"] if d else None
-
             leads.append({
                 "id":              r["id"],
-                "empresa":         get_title(),
+                "empresa":         _get_title(props),
                 "site":            props.get("Site Atual", {}).get("url", ""),
                 "telefone":        props.get("Telefone", {}).get("phone_number", ""),
-                "diagnostico":     get_text("Diagnóstico Gemini"),
+                "diagnostico":     _get_text(props, "Diagnóstico Gemini"),
                 "link_wa":         props.get("Link WhatsApp", {}).get("url", ""),
-                "status":          get_status(),
-                "primeiro_contato":get_date("Primeiro Contato"),
+                "status":          _get_status(props),
+                "primeiro_contato":_get_date(props, "Primeiro Contato"),
             })
+        log(f"✅ buscar_leads_follow_up: {len(leads)} leads encontrados.")
         return leads
 
     except Exception as e:

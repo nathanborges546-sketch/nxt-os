@@ -434,13 +434,27 @@ elif menu == "🔁 Follow Up":
 
     if st.button("🔄 Atualizar Esteira"):
         st.session_state.pop("leads_follow_up", None)
-        st.rerun()
 
+    # Sempre recarrega ao entrar na aba (invalida cache do session_state)
     if "leads_follow_up" not in st.session_state:
         with st.spinner("Carregando esteira do Notion..."):
             st.session_state.leads_follow_up = auto.buscar_leads_follow_up()
 
     leads_fu = st.session_state.leads_follow_up
+
+    # ── Painel de Debug (expander oculto por padrão) ──
+    with st.expander("🔍 Debug — Dados brutos da API", expanded=False):
+        st.write(f"**Total retornado pelo Notion:** {len(leads_fu)} leads")
+        if leads_fu:
+            for i, l in enumerate(leads_fu):
+                st.json({
+                    "empresa":         l.get("empresa"),
+                    "status":          l.get("status"),
+                    "primeiro_contato":l.get("primeiro_contato"),
+                })
+        else:
+            st.warning("A query retornou 0 resultados. Verifique se o lead tem status 'Tentativa de contato' ou 'Follow up' no Notion.")
+
     hoje = datetime.now().date()
 
     # ── Processa regras automáticas antes de renderizar ──
