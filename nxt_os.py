@@ -1,4 +1,5 @@
 import streamlit as st
+# Versão: 1.2.0 - Fix: Intelligent Mapping Reload
 import pandas as pd
 import numpy as np
 import io

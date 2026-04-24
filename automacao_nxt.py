@@ -151,6 +151,75 @@ HEADERS = {
     "Notion-Version": "2022-06-28"
 }
 
+# ── NOVAS FUNÇÕES DE MAPEAMENTO INTELIGENTE ──
+
+def identificar_colunas_por_conteudo(df):
+    """Analisa o conteúdo das colunas para mapear automaticamente para o formato Notion."""
+    mapeamento = {}
+    colunas_df = df.columns
+    sample = df.head(10).astype(str)
+    
+    termos_negocio = ['agência', 'marketing', 'social media', 'imobiliária', 'consultoria', 'advocacia', 'estética', 'clínica']
+    
+    for col in colunas_df:
+        content = " ".join(sample[col].tolist()).lower()
+        col_lower = col.lower()
+        
+        # 1. Site Atual
+        if any(x in col_lower for x in ['link', 'website', 'site_url']) or content.startswith('http'):
+            mapeamento[col] = "Site Atual"
+        
+        # 2. Instagram
+        elif 'instagram.com' in content:
+            mapeamento[col] = "Instagram"
+            
+        # 3. LinkedIn
+        elif 'linkedin.com/company' in content or 'linkedin.com/in' in content:
+            mapeamento[col] = "LinkedIn"
+            
+        # 4. E-mail
+        elif '@' in content and '.' in content:
+            mapeamento[col] = "E-mail"
+            
+        # 5. Telefone
+        elif any(c.isdigit() for c in content) and len("".join(filter(str.isdigit, content))) >= 8:
+            if "phone" in col_lower or "tel" in col_lower or "whatsapp" in col_lower:
+                mapeamento[col] = "Telefone"
+                
+        # 6. Tipo de Negócio
+        elif any(t in content for t in termos_negocio) or col_lower in ['category', 'categoria', 'industry']:
+            mapeamento[col] = "Tipo de Negócio"
+            
+        # 7. Empresa
+        elif col_lower in ['name', 'company_name', 'title', 'empresa', 'nome']:
+            mapeamento[col] = "Empresa"
+
+        # 8. Localização
+        elif col_lower in ['city', 'address', 'location', 'cidade', 'endereço', 'localização']:
+            mapeamento[col] = "Localização"
+
+        # 9. Decisor
+        elif any(x in col_lower for x in ['owner', 'founder', 'ceo', 'decision_maker', 'decisor']):
+            mapeamento[col] = "Decisor"
+
+    return mapeamento
+
+def limpar_colunas_obsoletas(df, mapeamento_efetuado):
+    """Remove colunas que não foram mapeadas para o formato oficial."""
+    colunas_oficiais = [
+        "Empresa", "Site Atual", "E-mail", "Telefone", 
+        "LinkedIn", "Instagram", "Tipo de Negócio", "Localização", "Decisor"
+    ]
+    
+    # Renomeia as colunas detectadas
+    df_renamed = df.rename(columns=mapeamento_efetuado)
+    
+    # Mantém apenas as que estão na lista oficial
+    cols_to_keep = [c for c in df_renamed.columns if c in colunas_oficiais]
+    return df_renamed[cols_to_keep].copy()
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 # --- CONFIGURAÇÃO DE LOGS (Independente) ---
 path_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'automacao.log')
 logger = logging.getLogger("automacao_nxt")
@@ -331,71 +400,6 @@ def remover_duplicados_smart(df):
         
     removed = before - len(df_clean)
     return df_clean, removed
-
-def identificar_colunas_por_conteudo(df):
-    """Analisa o conteúdo das colunas para mapear automaticamente para o formato Notion."""
-    mapeamento = {}
-    colunas_df = df.columns
-    sample = df.head(10).astype(str)
-    
-    termos_negocio = ['agência', 'marketing', 'social media', 'imobiliária', 'consultoria', 'advocacia', 'estética', 'clínica']
-    
-    for col in colunas_df:
-        content = " ".join(sample[col].tolist()).lower()
-        col_lower = col.lower()
-        
-        # 1. Site Atual
-        if any(x in col_lower for x in ['link', 'website', 'site_url']) or content.startswith('http'):
-            mapeamento[col] = "Site Atual"
-        
-        # 2. Instagram
-        elif 'instagram.com' in content:
-            mapeamento[col] = "Instagram"
-            
-        # 3. LinkedIn
-        elif 'linkedin.com/company' in content or 'linkedin.com/in' in content:
-            mapeamento[col] = "LinkedIn"
-            
-        # 4. E-mail
-        elif '@' in content and '.' in content:
-            mapeamento[col] = "E-mail"
-            
-        # 5. Telefone
-        elif any(c.isdigit() for c in content) and len("".join(filter(str.isdigit, content))) >= 8:
-            if "phone" in col_lower or "tel" in col_lower or "whatsapp" in col_lower:
-                mapeamento[col] = "Telefone"
-                
-        # 6. Tipo de Negócio
-        elif any(t in content for t in termos_negocio) or col_lower in ['category', 'categoria', 'industry']:
-            mapeamento[col] = "Tipo de Negócio"
-            
-        # 7. Empresa
-        elif col_lower in ['name', 'company_name', 'title', 'empresa', 'nome']:
-            mapeamento[col] = "Empresa"
-
-        # 8. Localização
-        elif col_lower in ['city', 'address', 'location', 'cidade', 'endereço', 'localização']:
-            mapeamento[col] = "Localização"
-
-        # 9. Decisor
-        elif any(x in col_lower for x in ['owner', 'founder', 'ceo', 'decision_maker', 'decisor']):
-            mapeamento[col] = "Decisor"
-
-    return mapeamento
-
-def limpar_colunas_obsoletas(df, mapeamento_efetuado):
-    """Remove colunas que não foram mapeadas para o formato oficial."""
-    colunas_oficiais = [
-        "Empresa", "Site Atual", "E-mail", "Telefone", 
-        "LinkedIn", "Instagram", "Tipo de Negócio", "Localização", "Decisor"
-    ]
-    
-    # Renomeia as colunas detectadas
-    df_renamed = df.rename(columns=mapeamento_efetuado)
-    
-    # Mantém apenas as que estão na lista oficial
-    cols_to_keep = [c for c in df_renamed.columns if c in colunas_oficiais]
-    return df_renamed[cols_to_keep].copy()
 
 # --- 3. INTELIGÊNCIA E VALIDAÇÃO ---
 
