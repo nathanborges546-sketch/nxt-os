@@ -172,7 +172,7 @@ log("🚀 Script automacao_nxt.py carregado com sucesso.")
 
 # --- 2. MAPEAMENTO E PADRONIZAÇÃO ---
 MAPA_COLUNAS = {
-    'empresa': ['Empresa', 'name', 'company_name', 'Nome'],
+    'empresa': ['website_title', 'linkedin.li_companies.name', 'Empresa', 'name', 'company_name', 'Nome', 'title'],
     'site': ['Site Atual', 'site', 'website', 'URL'],
     'telefone': ['Telefone', 'phone', 'phone_number', 'numero'],
     'email': ['email', 'E-mail', 'Email'],
@@ -207,8 +207,74 @@ def buscar_dado(row, categoria):
         sn = str(sinonimo).strip().lower()
         if sn in colunas_csv:
             v = row[colunas_csv[sn]]
-            return str(v).strip() if pd.notnull(v) else None
+            # Se for Outscraper, pode haver campos vazios como "nan" ou "None"
+            if pd.notnull(v) and str(v).strip().lower() not in ["", "nan", "none"]:
+                return str(v).strip()
     return None
+
+def consolidar_contatos_outscraper(row):
+    """Lógica de Cascata para Leads do Outscraper:
+    1. E-mail: Valida status (DELIVERABLE/CATCH-ALL) em cascata (1->3).
+    2. Decisor: Extrai nome do dono do e-mail validado.
+    3. Telefone: Cascata de phone_1 até phone_3.
+    4. Redes: LinkedIn, Instagram, Facebook.
+    """
+    res = {}
+    
+    # --- 1. CASCATA DE E-MAILS ---
+    email_valido = None
+    decisor_valido = None
+    
+    for i in range(1, 4):
+        e_col = f"email_{i}"
+        s_col = f"email_{i}.emails_validator.status"
+        n_col = f"email_{i}_full_name"
+        
+        email = str(row.get(e_col, "")).strip()
+        status = str(row.get(s_col, "")).strip().upper()
+        nome = str(row.get(n_col, "")).strip()
+        
+        if email and email.lower() != "nan" and status in ["DELIVERABLE", "CATCH-ALL"]:
+            email_valido = email
+            decisor_valido = nome if nome and nome.lower() != "nan" else None
+            break
+            
+    res["email"] = email_valido
+    res["decisor"] = decisor_valido
+    
+    # --- 2. CASCATA DE TELEFONES ---
+    tel_valido = None
+    for i in range(1, 4):
+        t_col = f"phone_{i}"
+        tel = str(row.get(t_col, "")).strip()
+        if tel and tel.lower() != "nan":
+            # Limpa e formata (+55...)
+            tel_limpo = "".join(filter(str.isdigit, tel))
+            if tel_limpo:
+                if not tel_limpo.startswith("55") and len(tel_limpo) >= 10:
+                    tel_valido = f"+55{tel_limpo}"
+                else:
+                    tel_valido = f"+{tel_limpo}"
+                break
+    res["telefone"] = tel_valido
+    
+    # --- 3. REDES SOCIAIS ---
+    res["linkedin"] = str(row.get("linkedin", "")).strip() if pd.notnull(row.get("linkedin")) else ""
+    res["instagram"] = str(row.get("instagram", "")).strip() if pd.notnull(row.get("instagram")) else ""
+    res["facebook"] = str(row.get("facebook", "")).strip() if pd.notnull(row.get("facebook")) else ""
+    
+    for rede in ["linkedin", "instagram", "facebook"]:
+        if res[rede].lower() == "nan": res[rede] = ""
+
+    # Determinar Meio de Contato Inicial
+    if email_valido:
+        res["meio_contato"] = "E-mail"
+    elif tel_valido:
+        res["meio_contato"] = "WhatsApp"
+    else:
+        res["meio_contato"] = ""
+        
+    return res
 
 # --- 3. INTELIGÊNCIA E VALIDAÇÃO ---
 
@@ -403,6 +469,9 @@ def enviar_notion(dados, page_id=None):
         "Site Atual": { "url": dados.get('site') if dados.get('site') else None },
         "Telefone": { "phone_number": dados.get('telefone') if dados.get('telefone') else None },
         "E-mail": { "email": dados.get('email') if dados.get('email') else None },
+        "LinkedIn": { "url": dados.get('linkedin') if dados.get('linkedin') else None },
+        "Instagram": { "url": dados.get('instagram') if dados.get('instagram') else None },
+        "Facebook": { "url": dados.get('facebook') if dados.get('facebook') else None },
         "Link WhatsApp": { "url": link_wa },
         "Disparo": { "select": { "name": disparo_final } }
     }

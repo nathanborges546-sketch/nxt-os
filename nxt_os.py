@@ -214,6 +214,11 @@ elif menu == "📥 Importação":
         st.error(f"Erro ao ler arquivo: {e}"); st.stop()
 
     st.divider()
+    
+    # ══ INTELIGÊNCIA OUTSCRAPER (CASCATA) ══
+    is_outscraper = st.checkbox("✨ Ativar Inteligência Outscraper (Cascata de E-mails)", value=False, key="imp_outscraper")
+    if is_outscraper:
+        st.caption("Aplica lógica de cascata: valida e-mails (Deliverable/Catch-all), phones e extrai decisores automaticamente.")
 
     # ══ 2. SELEÇÃO DE COLUNAS ══
     st.subheader("2 · Seleção de Colunas")
@@ -374,10 +379,16 @@ elif menu == "📥 Importação":
     # ══ 7. EXPORTAÇÃO E INTEGRAÇÃO COM NOTION ══
     st.subheader("7 · Exportação e Integração")
     df_final = df_consolidated.copy()
-    m1, m2, m3 = st.columns(3)
+    m1, m2, m3, m4 = st.columns(4)
     m1.metric("Leads Iniciais",    f"{st.session_state.imp_initial_count:,}")
     m2.metric("Leads Purificados", f"{len(df_final):,}")
     m3.metric("Taxa de Retenção",  f"{(len(df_final)/st.session_state.imp_initial_count*100):.1f}%" if st.session_state.imp_initial_count > 0 else "—")
+    
+    # ══ MÉTRICAS DE QUALIDADE ══
+    if is_outscraper:
+        valid_contacts = sum(1 for _, row in df_final.iterrows() if auto.consolidar_contatos_outscraper(row).get("email") or auto.consolidar_contatos_outscraper(row).get("telefone"))
+        m4.metric("🔥 Contatos Validados", valid_contacts)
+    
     st.dataframe(df_final.head(10), use_container_width=True)
 
     col_exp, col_notion = st.columns(2)
@@ -392,27 +403,45 @@ elif menu == "📥 Importação":
             status_text  = st.empty()
             total, sucessos = len(df_final), 0
             for i, (_, row) in enumerate(df_final.iterrows()):
+                # Se for Outscraper, usamos a lógica de cascata primeiro
+                out_cons = {}
+                if is_outscraper:
+                    out_cons = auto.consolidar_contatos_outscraper(row)
+                    # Se não tiver nenhum contato válido na cascata, pulamos (descarte automático)
+                    if not out_cons.get("email") and not out_cons.get("telefone"):
+                        continue
+                
                 empresa = auto.buscar_dado(row, 'empresa')
                 site    = auto.buscar_dado(row, 'site')
+                
+                # Se for Outscraper, prioriza os dados consolidados
+                tel_final   = out_cons.get("telefone") if is_outscraper else auto.buscar_dado(row, 'telefone')
+                email_final = out_cons.get("email") if is_outscraper else auto.buscar_dado(row, 'email')
+                decisor_final = out_cons.get("decisor") if is_outscraper else auto.buscar_dado(row, 'decisor')
+                meio_final  = out_cons.get("meio_contato") if is_outscraper else auto.buscar_dado(row, 'meio_contato')
+
                 status_text.text(f"Integrando {i+1}/{total}: {empresa or 'Lead'}")
                 lead_data = {
                     'empresa':       empresa,
                     'site':          site,
-                    'telefone':      auto.buscar_dado(row, 'telefone'),
-                    'email':         auto.buscar_dado(row, 'email'),
+                    'telefone':      tel_final,
+                    'email':         email_final,
                     'status':        auto.buscar_dado(row, 'status'),
                     'tipo_negocio':  auto.categorizar_negocio(auto.buscar_dado(row, 'tipo_negocio')),
                     'localizacao':   auto.buscar_dado(row, 'localizacao'),
-                    'decisor':       auto.buscar_dado(row, 'decisor'),
+                    'decisor':       decisor_final,
                     'avaliacao':     auto.buscar_dado(row, 'avaliacao'),
                     'qtd_avaliacoes':auto.buscar_dado(row, 'qtd_avaliacoes'),
                     'rid':           auto.gerar_rid(site, empresa),
                     'disparo':       auto.buscar_dado(row, 'disparo'),
                     'motivo':        auto.buscar_dado(row, 'motivo'),
-                    'meio_contato':  auto.buscar_dado(row, 'meio_contato'),
+                    'meio_contato':  meio_final,
                     'observacoes':   auto.buscar_dado(row, 'observacoes'),
                     'primeiro_contato': auto.buscar_dado(row, 'primeiro_contato'),
                     'data_resposta': auto.buscar_dado(row, 'data_resposta'),
+                    'linkedin':      out_cons.get("linkedin") if is_outscraper else auto.buscar_dado(row, 'linkedin'),
+                    'instagram':     out_cons.get("instagram") if is_outscraper else auto.buscar_dado(row, 'instagram'),
+                    'facebook':      out_cons.get("facebook") if is_outscraper else auto.buscar_dado(row, 'facebook'),
                 }
                 page_id = auto.verificar_duplicado(lead_data['empresa'], lead_data['site'], lead_data['localizacao'])
                 if auto.enviar_notion(lead_data, page_id=page_id):
