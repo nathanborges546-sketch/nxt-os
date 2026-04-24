@@ -3,6 +3,7 @@ import time
 import pandas as pd
 import requests
 import logging
+import re
 import urllib.parse
 from datetime import datetime, timedelta
 from urllib.parse import quote
