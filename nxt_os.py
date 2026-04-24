@@ -492,10 +492,10 @@ elif menu == "🎯 Disparos":
                     """, unsafe_allow_html=True)
                     
                     # ── Gerar links dinâmicos com scripts customizados ──
-                    link_wa = auto.criar_link_whatsapp(lead['telefone'], lead['empresa'], lead['diagnostico'], st.session_state.scripts_custom["whatsapp"])
-                    link_em = auto.gerar_link_email(lead['email'], lead['empresa'], lead['diagnostico'], st.session_state.scripts_custom["email"])
-                    link_li = auto.gerar_link_linkedin(lead['linkedin'])
-                    link_ig = auto.gerar_link_instagram(lead['instagram'])
+                    link_wa = auto.criar_link_whatsapp(lead.get('telefone'), lead.get('empresa'), lead.get('diagnostico'), st.session_state.scripts_custom.get("whatsapp"))
+                    link_em = auto.gerar_link_email(lead.get('email'), lead.get('empresa'), lead.get('diagnostico'), st.session_state.scripts_custom.get("email"))
+                    link_li = auto.gerar_link_linkedin(lead.get('linkedin'))
+                    link_ig = auto.gerar_link_instagram(lead.get('instagram'))
 
                     # ── Determinar quais botões exibir ──
                     botoes_ativos = []
@@ -511,17 +511,17 @@ elif menu == "🎯 Disparos":
                             with cols[i]:
                                 st.link_button(label, url, use_container_width=True)
                                 if tipo in ["li", "ig"]:
-                                    if st.button(f"📋 Script", key=f"scr_{tipo}_{lead['id']}", use_container_width=True):
-                                        diag_limpo = str(lead['diagnostico']).replace('\n', ' ')[:200] if lead['diagnostico'] else "análise técnica"
-                                        script_final = st.session_state.scripts_custom[tipo].replace("[Empresa]", lead['empresa']).replace("[Diagnóstico]", diag_limpo)
+                                    if st.button(f"📋 Script", key=f"scr_{tipo}_{lead.get('id')}", use_container_width=True):
+                                        diag_limpo = str(lead.get('diagnostico')).replace('\n', ' ')[:200] if lead.get('diagnostico') else "análise técnica"
+                                        script_final = st.session_state.scripts_custom.get(tipo).replace("[Empresa]", lead.get('empresa')).replace("[Diagnóstico]", diag_limpo)
                                         st.info(script_final)
 
                         with cols[-1]:
-                            if st.button(f"✅ Confirmar", key=f"conf_{lead['id']}", type="primary", use_container_width=True):
-                                if auto.atualizar_status_disparo(lead['id']):
-                                    st.toast(f"🚀 {lead['empresa']} marcado como 'Tentativa de contato'!")
+                            if st.button(f"✅ Confirmar", key=f"conf_{lead.get('id')}", type="primary", use_container_width=True):
+                                if auto.atualizar_status_disparo(lead.get('id')):
+                                    st.toast(f"🚀 {lead.get('empresa')} marcado como 'Tentativa de contato'!")
                                     time.sleep(0.5)
-                                    st.session_state.leads_prospeccao = [l for l in st.session_state.leads_prospeccao if l['id'] != lead['id']]
+                                    st.session_state.leads_prospeccao = [l for l in st.session_state.leads_prospeccao if l.get('id') != lead.get('id')]
                                     st.rerun()
                     else:
                         st.warning("⚠️ Nenhum canal de contato disponível para este lead.")
