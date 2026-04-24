@@ -429,64 +429,107 @@ elif menu == "📥 Importação":
 
 # ───────────────────────────── MÓDULO: DISPAROS ───────────────────────────────
 elif menu == "🎯 Disparos":
-    st.title("🎯 Prospecção Ativa (Disparos)")
-    st.caption("Fila de leads aguardando primeiro contato via WhatsApp.")
+    st.title("🎯 Prospecção Ativa (Multi-Canal)")
     
-    if st.button("🔄 Atualizar Fila do Notion"):
-        st.session_state.leads_prospeccao = auto.buscar_leads_notion()
-        st.rerun()
+    # ── Inicialização de Scripts no Session State ──
+    if "scripts_custom" not in st.session_state:
+        st.session_state.scripts_custom = {
+            "whatsapp": auto.obter_script_base("whatsapp"),
+            "email": auto.obter_script_base("email"),
+            "linkedin": auto.obter_script_base("linkedin"),
+            "instagram": auto.obter_script_base("instagram")
+        }
 
-    if "leads_prospeccao" not in st.session_state:
-        st.session_state.leads_prospeccao = auto.buscar_leads_notion()
+    tab_fila, tab_scripts = st.tabs(["🎯 Fila de Leads", "📜 Customizar Scripts"])
 
-    leads = st.session_state.leads_prospeccao
-
-    if not leads:
-        st.info("🎉 Ninguém na fila! Todos os leads foram contactados ou a base está vazia.")
-    else:
-        st.write(f"Exibindo **{len(leads)}** leads prontos para abordagem.")
+    # ── ABA: CUSTOMIZAR SCRIPTS ──
+    with tab_scripts:
+        st.subheader("📜 Modelos de Abordagem")
+        st.caption("Use [Empresa] e [Diagnóstico] como variáveis automáticas.")
         
-        for lead in leads:
-            with st.container():
-                st.markdown(f"""
-                    <div class="card">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span class="company-name">{lead['empresa']}</span>
-                            <span class="status-badge">Aguardando Disparo</span>
-                        </div>
-                        <div style="margin-top: 10px;">
-                            <a href="{lead['site']}" target="_blank" style="color: #4caf50; text-decoration: none;">🌐 {lead['site'] or 'Sem Site'}</a>
-                        </div>
-                        <div class="diagnostico">
-                            <strong>Diagnóstico Gemini:</strong><br>
-                            {lead['diagnostico'] or 'Análise pendente...'}
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                col_btn1, col_btn2, col_btn3 = st.columns([1.2, 1.2, 1.6])
-                
-                with col_btn1:
-                    if lead['link_wa']:
-                        st.link_button("📲 Abrir WhatsApp", lead['link_wa'], help="Abre o WhatsApp Web/App em uma nova aba.")
-                    else:
-                        st.button("📲 Sem Telefone", disabled=True, key=f"no_tel_{lead['id']}")
+        st.session_state.scripts_custom["whatsapp"] = st.text_area("WhatsApp", st.session_state.scripts_custom["whatsapp"], height=100)
+        st.session_state.scripts_custom["email"] = st.text_area("E-mail", st.session_state.scripts_custom["email"], height=150)
+        st.session_state.scripts_custom["linkedin"] = st.text_area("LinkedIn", st.session_state.scripts_custom["linkedin"], height=100)
+        st.session_state.scripts_custom["instagram"] = st.text_area("Instagram", st.session_state.scripts_custom["instagram"], height=100)
+        
+        if st.button("♻️ Resetar Padrões"):
+            for k in st.session_state.scripts_custom:
+                st.session_state.scripts_custom[k] = auto.obter_script_base(k)
+            st.rerun()
 
-                with col_btn2:
-                    if st.button(f"✅ Confirmar Disparo", key=f"conf_{lead['id']}", help="Confirma o envio e atualiza o Notion."):
-                        if auto.atualizar_status_disparo(lead['id']):
-                            st.toast(f"🚀 {lead['empresa']} marcado como 'Tentativa de contato'!")
-                            time.sleep(0.5)
-                            st.session_state.leads_prospeccao = [l for l in st.session_state.leads_prospeccao if l['id'] != lead['id']]
-                            st.rerun()
-                        else:
-                            st.error("Erro ao atualizar no Notion. Verifique os logs.")
-                
-                with col_btn3:
-                    if st.button(f"❌ Pular", key=f"skip_{lead['id']}"):
-                        st.session_state.leads_prospeccao = [l for l in st.session_state.leads_prospeccao if l['id'] != lead['id']]
-                        st.rerun()
-                
+    # ── ABA: FILA DE LEADS ──
+    with tab_fila:
+        if st.button("🔄 Atualizar Fila do Notion"):
+            st.session_state.leads_prospeccao = auto.buscar_leads_notion()
+            st.rerun()
+
+        if "leads_prospeccao" not in st.session_state:
+            st.session_state.leads_prospeccao = auto.buscar_leads_notion()
+
+        leads = st.session_state.leads_prospeccao
+
+        if not leads:
+            st.info("🎉 Ninguém na fila! Todos os leads foram contactados ou a base está vazia.")
+        else:
+            st.write(f"Exibindo **{len(leads)}** leads prontos para abordagem.")
+            
+            for lead in leads:
+                with st.container():
+                    st.markdown(f"""
+                        <div class="card">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="company-name">{lead['empresa']}</span>
+                                <span class="status-badge">Aguardando Disparo</span>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <a href="{lead['site']}" target="_blank" style="color: #4caf50; text-decoration: none;">🌐 {lead['site'] or 'Sem Site'}</a>
+                            </div>
+                            <div class="diagnostico">
+                                <strong>Diagnóstico Gemini:</strong><br>
+                                {lead['diagnostico'] or 'Análise pendente...'}
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # ── Gerar links dinâmicos com scripts customizados ──
+                    link_wa = auto.criar_link_whatsapp(lead['telefone'], lead['empresa'], lead['diagnostico'], st.session_state.scripts_custom["whatsapp"])
+                    link_em = auto.gerar_link_email(lead['email'], lead['empresa'], lead['diagnostico'], st.session_state.scripts_custom["email"])
+                    link_li = auto.gerar_link_linkedin(lead['linkedin'])
+                    link_ig = auto.gerar_link_instagram(lead['instagram'])
+
+                    # ── Determinar quais botões exibir ──
+                    botoes_ativos = []
+                    if link_wa: botoes_ativos.append(("wa", "📲 WhatsApp", link_wa))
+                    if link_em: botoes_ativos.append(("em", "📧 E-mail", link_em))
+                    if link_li: botoes_ativos.append(("li", "🔗 LinkedIn", link_li))
+                    if link_ig: botoes_ativos.append(("ig", "📸 Instagram", link_ig))
+
+                    # ── Renderizar Colunas de Disparo ──
+                    if botoes_ativos:
+                        cols = st.columns(len(botoes_ativos) + 1) # +1 para o botão de confirmação
+                        for i, (tipo, label, url) in enumerate(botoes_ativos):
+                            with cols[i]:
+                                st.link_button(label, url, use_container_width=True)
+                                if tipo in ["li", "ig"]:
+                                    if st.button(f"📋 Script", key=f"scr_{tipo}_{lead['id']}", use_container_width=True):
+                                        diag_limpo = str(lead['diagnostico']).replace('\n', ' ')[:200] if lead['diagnostico'] else "análise técnica"
+                                        script_final = st.session_state.scripts_custom[tipo].replace("[Empresa]", lead['empresa']).replace("[Diagnóstico]", diag_limpo)
+                                        st.info(script_final)
+
+                        with cols[-1]:
+                            if st.button(f"✅ Confirmar", key=f"conf_{lead['id']}", type="primary", use_container_width=True):
+                                if auto.atualizar_status_disparo(lead['id']):
+                                    st.toast(f"🚀 {lead['empresa']} marcado como 'Tentativa de contato'!")
+                                    time.sleep(0.5)
+                                    st.session_state.leads_prospeccao = [l for l in st.session_state.leads_prospeccao if l['id'] != lead['id']]
+                                    st.rerun()
+                    else:
+                        st.warning("⚠️ Nenhum canal de contato disponível para este lead.")
+                        if st.button(f"✅ Marcar como Contactado (Manual)", key=f"man_{lead['id']}"):
+                            if auto.atualizar_status_disparo(lead['id']):
+                                st.session_state.leads_prospeccao = [l for l in st.session_state.leads_prospeccao if l['id'] != lead['id']]
+                                st.rerun()
+
                 st.divider()
 
 # ───────────────────────────── MÓDULO: FOLLOW UP ─────────────────────────────

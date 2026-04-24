@@ -297,17 +297,51 @@ def gerar_rid(site, empresa):
 
 import urllib.parse
 
-def criar_link_whatsapp(telefone, empresa, diagnostico):
+def obter_script_base(canal):
+    """Retorna o script padrão para cada canal de prospecção."""
+    scripts = {
+        "whatsapp": "Olá, sou o Nathan da NXT. Analisei o site da [Empresa] e notei: [Diagnóstico]. Podemos conversar?",
+        "email": "Olá,\n\nAnalisei o site da [Empresa] e identifiquei oportunidades interessantes de otimização baseadas em: [Diagnóstico].\n\nPodemos agendar uma breve conversa?\n\nAtenciosamente,\nNathan - NXT",
+        "linkedin": "Olá! Vi o trabalho da [Empresa] e achei muito interessante. Notei alguns pontos sobre [Diagnóstico] que gostaria de compartilhar. Vamos conectar?",
+        "instagram": "Olá pessoal da [Empresa]! Adorei o perfil de vocês. Notei algo no site que pode interessar: [Diagnóstico]. Sucesso!"
+    }
+    return scripts.get(canal, "")
+
+def criar_link_whatsapp(telefone, empresa, diagnostico, script_base=None):
     if not telefone or str(telefone).lower() == 'none':
         return None
     
     tel_limpo = "".join(filter(str.isdigit, str(telefone)))
-    
     diag_limpo = str(diagnostico).replace('\n', ' ')[:200] if diagnostico else "análise técnica"
-    msg = f"Olá, sou o Nathan da NXT. Analisei o site da {empresa} e notei: {diag_limpo}. Podemos conversar?"
+    
+    base = script_base if script_base else obter_script_base("whatsapp")
+    msg = base.replace("[Empresa]", empresa).replace("[Diagnóstico]", diag_limpo)
     
     msg_codificada = urllib.parse.quote(msg)
     return f"https://wa.me/{tel_limpo}?text={msg_codificada}"
+
+def gerar_link_email(email, empresa, diagnostico, script_base=None):
+    if not email or str(email).lower() == 'none':
+        return None
+    
+    assunto = urllib.parse.quote(f"Parceria NXT x {empresa}")
+    diag_limpo = str(diagnostico).replace('\n', ' ')[:200] if diagnostico else "análise técnica"
+    
+    base = script_base if script_base else obter_script_base("email")
+    corpo = base.replace("[Empresa]", empresa).replace("[Diagnóstico]", diag_limpo)
+    corpo_codificado = urllib.parse.quote(corpo)
+    
+    return f"mailto:{email}?subject={assunto}&body={corpo_codificado}"
+
+def gerar_link_linkedin(perfil_url):
+    if not perfil_url or str(perfil_url).lower() == 'none' or "linkedin.com" not in str(perfil_url):
+        return None
+    return str(perfil_url).strip()
+
+def gerar_link_instagram(perfil_url):
+    if not perfil_url or str(perfil_url).lower() == 'none' or "instagram.com" not in str(perfil_url):
+        return None
+    return str(perfil_url).strip()
 
 def enviar_notion(dados, page_id=None):
     if page_id:
@@ -470,6 +504,9 @@ def buscar_leads_notion():
                     "empresa": get_title(),
                     "site": props.get("Site Atual", {}).get("url", ""),
                     "telefone": props.get("Telefone", {}).get("phone_number", ""),
+                    "email": props.get("E-mail", {}).get("email", ""),
+                    "linkedin": props.get("LinkedIn", {}).get("url", ""),
+                    "instagram": props.get("Instagram", {}).get("url", ""),
                     "diagnostico": get_text("Diagnóstico Gemini"),
                     "link_wa": props.get("Link WhatsApp", {}).get("url", "")
                 })
@@ -569,6 +606,9 @@ def buscar_leads_follow_up():
                 "empresa":         _get_title(props),
                 "site":            props.get("Site Atual", {}).get("url", ""),
                 "telefone":        props.get("Telefone", {}).get("phone_number", ""),
+                "email":           props.get("E-mail", {}).get("email", ""),
+                "linkedin":        props.get("LinkedIn", {}).get("url", ""),
+                "instagram":       props.get("Instagram", {}).get("url", ""),
                 "diagnostico":     _get_text(props, "Diagnóstico Gemini"),
                 "link_wa":         props.get("Link WhatsApp", {}).get("url", ""),
                 "status":          _get_status(props),
