@@ -1,0 +1,475 @@
+import os
+import time
+import pandas as pd
+import requests
+import logging
+import urllib.parse
+from datetime import datetime
+from urllib.parse import quote
+from dotenv import load_dotenv
+
+# Import robusto do Gemini — evita conflito de namespace do Google
+try:
+    from google import genai
+except ImportError as e:
+    raise ImportError(
+        "Biblioteca 'google-genai' não encontrada. Execute: pip install google-genai==1.0.0"
+    ) from e
+
+# --- 1. CONFIGURAÇÃO DE AMBIENTE ---
+# Busca .env de forma absoluta — funciona local, Codespaces e Streamlit Cloud
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(dotenv_path=os.path.join(_BASE_DIR, '.env'))
+if not os.getenv("NOTION_TOKEN"):
+    load_dotenv(dotenv_path=os.path.join(_BASE_DIR, '..', 'automation', '.env'))
+
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+DATABASE_ID  = os.getenv("DATABASE_ID")
+GEMINI_KEY   = os.getenv("GEMINI_KEY")
+
+# Fallback para Streamlit Cloud (st.secrets) se variável de ambiente não existir
+try:
+    import streamlit as _st
+    if not NOTION_TOKEN:
+        NOTION_TOKEN = _st.secrets.get("NOTION_TOKEN", "")
+    if not DATABASE_ID:
+        DATABASE_ID  = _st.secrets.get("DATABASE_ID",  "")
+    if not GEMINI_KEY:
+        GEMINI_KEY   = _st.secrets.get("GEMINI_KEY",  "")
+except Exception:
+    pass  # Streamlit não disponível (ex: script CLI)
+
+# Inicialização segura do Gemini
+if GEMINI_KEY:
+    client = genai.Client(api_key=GEMINI_KEY)
+else:
+    client = None  # Gemini desativado — diagnóstico não disponível
+
+MODEL_NAME = "gemini-2.0-flash"
+
+HEADERS = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Content-Type": "application/json",
+    "Notion-Version": "2022-06-28"
+}
+
+# --- CONFIGURAÇÃO DE LOGS (Independente) ---
+path_log = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'automacao.log')
+logger = logging.getLogger("automacao_nxt")
+logger.setLevel(logging.INFO)
+
+# Evita duplicar handlers se o script for importado várias vezes
+if not logger.handlers:
+    fh = logging.FileHandler(path_log, encoding='utf-8')
+    fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(fh)
+
+def log(msg, level="info"):
+    print(msg)
+    if level == "error": logger.error(msg)
+    else: logger.info(msg)
+
+# Log inicial para confirmar que o script carregou
+log("🚀 Script automacao_nxt.py carregado com sucesso.")
+
+# --- 2. MAPEAMENTO E PADRONIZAÇÃO ---
+MAPA_COLUNAS = {
+    'empresa': ['Empresa', 'name', 'company_name', 'Nome'],
+    'site': ['Site Atual', 'site', 'website', 'URL'],
+    'telefone': ['Telefone', 'phone', 'phone_number', 'numero'],
+    'email': ['email', 'E-mail', 'Email'],
+    'tipo_negocio': ['Tipo de Negócio', 'category', 'categoria'],
+    'localizacao': ['Localização', 'city', 'address', 'Address'],
+    'decisor': ['Nome do Decisor', 'Owner', 'Decision Maker'],
+    'avaliacao': ['Avaliação', 'Rating'],
+    'qtd_avaliacoes': ['Quantidade de Avaliações', 'reviews', 'reviews_count'],
+    'status': ['Status de Contato', 'Status', 'status_de_contato', 'Situação'],
+    'disparo': ['Disparo', 'disparo', 'status_disparo'],
+    'motivo': ['Motivo', 'motivo', 'reason'],
+    'meio_contato': ['Meio de Contato', 'meio', 'contact_method'],
+    'observacoes': ['Observações', 'Observação', 'notes'],
+    'primeiro_contato': ['Primeiro Contato', 'Data de Primeiro Contato', 'primeiro_contato'],
+    'data_resposta': ['Data de Resposta', 'Data da Resposta', 'data_resposta']
+}
+
+def categorizar_negocio(raw_tipo):
+    if not raw_tipo: return "Outros"
+    t = raw_tipo.lower()
+    if any(x in t for x in ["marketing", "publicidade", "tráfego", "ads", "comunicação"]):
+        return "Agência de Marketing"
+    if any(x in t for x in ["consultoria", "assessoria"]):
+        return "Consultoria"
+    if any(x in t for x in ["software", "tecnologia", "ti", "sistemas"]):
+        return "Tecnologia/SaaS"
+    return raw_tipo.strip().title()[:100]
+
+def buscar_dado(row, categoria):
+    colunas_csv = {str(col).strip().lower(): col for col in row.index}
+    for sinonimo in MAPA_COLUNAS[categoria]:
+        sn = str(sinonimo).strip().lower()
+        if sn in colunas_csv:
+            v = row[colunas_csv[sn]]
+            return str(v).strip() if pd.notnull(v) else None
+    return None
+
+# --- 3. INTELIGÊNCIA E VALIDAÇÃO ---
+
+def verificar_duplicado(empresa, site, localizacao):
+    """
+    Verifica se a empresa já existe no Notion.
+    """
+    if not empresa:
+        return None
+
+    url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+
+    query = {
+        "filter": {
+            "property": "Empresa",
+            "title": { "equals": empresa.strip() }
+        },
+        "page_size": 5
+    }
+    
+    try:
+        res = requests.post(url, headers=HEADERS, json=query)
+        if res.status_code != 200:
+            log(f"⚠️ Erro ao verificar duplicado para '{empresa}': {res.status_code}", "error")
+            return None
+
+        results = res.json().get("results", [])
+
+        if not results:
+            return None  # Nenhum encontrado → é novo
+
+        if len(results) == 1:
+            page_id = results[0]["id"]
+            log(f"♻️  Duplicado encontrado: '{empresa}' → page_id {page_id}")
+            return page_id
+
+        if site and str(site).lower() != 'none':
+            for r in results:
+                site_notion = r.get("properties", {}).get("Site Atual", {}).get("url", "")
+                if site_notion and site_notion.strip().rstrip("/") == site.strip().rstrip("/"):
+                    page_id = r["id"]
+                    log(f"♻️  Duplicado encontrado (via site): '{empresa}' → page_id {page_id}")
+                    return page_id
+
+        page_id = results[0]["id"]
+        log(f"♻️  Duplicado encontrado (1º resultado): '{empresa}' → page_id {page_id}")
+        return page_id
+
+    except Exception as e:
+        log(f"⚠️ Exceção ao verificar duplicado para '{empresa}': {e}", "error")
+        return None
+
+def gerar_rid(site, empresa):
+
+    if not site or "http" not in str(site):
+        return "Site inválido ou ausente."
+    
+    # Gemini não configurado
+    if not client:
+        return "Diagnóstico indisponível (GEMINI_KEY não configurada)."
+    
+    # Detecção de Redes Sociais
+    site_lower = str(site).lower()
+    is_social = any(x in site_lower for x in ["instagram.com", "linkedin.com", "facebook.com"])
+    
+    if is_social:
+        prompt = f"Analise o perfil de rede social desta empresa ({site}) e identifique 2 oportunidades de automação de atendimento ou captura de leads. Seja direto e use tom profissional."
+    else:
+        prompt = f"Analise o site {site} da empresa {empresa}. Liste 3 falhas técnicas B2B. Curto."
+    
+    try:
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config={'http_options': {'timeout': 10}} # Timeout de 10s para não travar
+        )
+        return response.text.strip()
+    except Exception as e:
+        if "429" in str(e) or "quota" in str(e).lower():
+            return "Diagnóstico pendente (Cota excedida)"
+        
+        print(f"⚠️ Erro Gemini em {empresa}: {e}")
+        return "Erro no diagnóstico."
+
+# --- 4. COMUNICAÇÃO COM NOTION ---
+
+import urllib.parse
+
+def criar_link_whatsapp(telefone, empresa, diagnostico):
+    if not telefone or str(telefone).lower() == 'none':
+        return None
+    
+    tel_limpo = "".join(filter(str.isdigit, str(telefone)))
+    
+    diag_limpo = str(diagnostico).replace('\n', ' ')[:200] if diagnostico else "análise técnica"
+    msg = f"Olá, sou o Nathan da NXT. Analisei o site da {empresa} e notei: {diag_limpo}. Podemos conversar?"
+    
+    msg_codificada = urllib.parse.quote(msg)
+    return f"https://wa.me/{tel_limpo}?text={msg_codificada}"
+
+def enviar_notion(dados, page_id=None):
+    if page_id:
+        url = f"https://api.notion.com/v1/pages/{page_id}"
+        http_method = requests.patch
+    else:
+        url = "https://api.notion.com/v1/pages"
+        http_method = requests.post
+
+    def limpar(v):
+        return str(v).strip() if v and str(v).lower() != 'none' else ""
+
+    # Status
+    status_csv = dados.get('status')
+    if str(status_csv).strip() == 'Arquivar':
+        status_final = 'Follow up'  # Nome exato no Notion (sem hífen)
+    else:
+        status_final = str(status_csv).strip() if status_csv and str(status_csv).lower() != 'none' else "Não contactado"
+
+    # Disparo
+    disparo_csv = dados.get('disparo')
+    disparo_final = str(disparo_csv).strip() if disparo_csv and str(disparo_csv).lower() != 'none' else "Aguardando disparo"
+    
+    # Motivo
+    motivo_csv = dados.get('motivo')
+    motivo_final = str(motivo_csv).strip() if motivo_csv and str(motivo_csv).lower() != 'none' else "Neutro"
+
+    # Meio de Contato
+    meio_csv = dados.get('meio_contato')
+    meio_final = str(meio_csv).strip() if meio_csv and str(meio_csv).lower() != 'none' else ""
+    
+    def formatar_data(data_raw):
+        if not data_raw or str(data_raw).lower() == 'none': return None
+        try:
+            return pd.to_datetime(data_raw).strftime('%Y-%m-%d')
+        except:
+            return None
+
+    p_contato = formatar_data(dados.get('primeiro_contato'))
+    d_resposta = formatar_data(dados.get('data_resposta'))
+
+    try:
+        val_avaliacao = float(str(dados.get('avaliacao', '0')).replace(',', '.'))
+    except:
+        val_avaliacao = 0.0
+
+    try:
+        val_qtd = int(float(str(dados.get('qtd_avaliacoes', '0')).replace('None', '0')))
+    except:
+        val_qtd = 0
+
+    link_wa = criar_link_whatsapp(dados.get('telefone'), dados.get('empresa'), dados.get('rid'))
+
+    propriedades = {
+        "Empresa": { "title": [{ "text": { "content": limpar(dados.get('empresa')) or "Sem Nome" } }] },
+        "Status de Contato": { "status": { "name": status_final } },
+        "Avaliação": { "number": val_avaliacao },
+        "Quantidade de Avaliações": { "number": val_qtd },
+        "Site Atual": { "url": dados.get('site') if dados.get('site') else None },
+        "Telefone": { "phone_number": dados.get('telefone') if dados.get('telefone') else None },
+        "E-mail": { "email": dados.get('email') if dados.get('email') else None },
+        "Link WhatsApp": { "url": link_wa },
+        "Disparo": { "select": { "name": disparo_final } }
+    }
+
+    if p_contato:
+        propriedades["Primeiro Contato"] = { "date": { "start": p_contato } }
+    if d_resposta:
+        propriedades["Data da Resposta"] = { "date": { "start": d_resposta } }
+
+    if meio_final:
+        propriedades["Meio de Contato"] = { "select": { "name": meio_final } }
+
+    if dados.get('tipo_negocio') and dados.get('tipo_negocio') != "Outros":
+        propriedades["Tipo de Negócio"] = { "select": { "name": dados['tipo_negocio'] } }
+    
+    campos_texto = {
+        "Localização": dados.get('localizacao'),
+        "Nome do Decisor": dados.get('decisor'),
+        "Diagnóstico Gemini": dados.get('rid'),
+        "Observações": dados.get('observacoes')
+    }
+    for nome, valor in campos_texto.items():
+        v_limpo = limpar(valor)
+        # Limite de 2000 chars da API do Notion para rich_text
+        v_limpo = v_limpo[:2000] if v_limpo else ""
+        if v_limpo or nome not in ["Observações", "Nome do Decisor"]:
+            propriedades[nome] = { "rich_text": [{ "text": { "content": v_limpo } }] if v_limpo else [] }
+
+    # Motivo: só envia se tiver valor definido (evita erro 400 se opção não existir)
+    if motivo_final and motivo_final != "Neutro":
+        propriedades["Motivo"] = { "select": { "name": motivo_final } }
+    else:
+        # Remove do payload se "Neutro" (pode não existir no Notion)
+        propriedades.pop("Motivo", None)
+
+    payload = {"properties": propriedades}
+    
+    if not page_id:
+        payload["parent"] = {"database_id": DATABASE_ID}
+
+    res = http_method(url, headers=HEADERS, json=payload)
+    
+    if res.status_code not in [200, 201, 202]:
+        try:
+            resp_body = res.json()
+            err_msg = f"❌ Erro Notion em {dados.get('empresa')}: HTTP {res.status_code}"
+            err_detail = f"   ↳ Mensagem: {resp_body.get('message', 'N/A')}"
+            err_path = f"   ↳ Path: {resp_body.get('path', 'N/A')}"
+            err_code = f"   ↳ Code: {resp_body.get('code', 'N/A')}"
+        except Exception:
+            err_msg = f"❌ Erro Notion em {dados.get('empresa')}: HTTP {res.status_code}"
+            err_detail, err_path, err_code = "", "", ""
+        log(err_msg, "error")
+        log(err_detail, "error")
+        log(err_path, "error")
+        log(err_code, "error")
+        return False
+    else:
+        log(f"✅ {dados.get('empresa')} {'atualizada' if page_id else 'criada'} com sucesso.")
+        return True
+
+def buscar_leads_notion():
+    """Busca leads para prospecção: Status='Não contactado' e Disparo='Aguardando disparo'"""
+    url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
+    
+    query = {
+        "filter": {
+            "and": [
+                {
+                    "property": "Status de Contato",
+                    "status": { "equals": "Não contactado" }
+                },
+                {
+                    "property": "Disparo",
+                    "select": { "equals": "Aguardando disparo" }
+                }
+            ]
+        }
+    }
+    
+    try:
+        res = requests.post(url, headers=HEADERS, json=query)
+        if res.status_code == 200:
+            results = res.json().get("results", [])
+            leads = []
+            for r in results:
+                props = r.get("properties", {})
+                
+                def get_text(prop_name):
+                    rt = props.get(prop_name, {}).get("rich_text", [])
+                    return rt[0]["text"]["content"] if rt else ""
+
+                def get_title():
+                    t = props.get("Empresa", {}).get("title", [])
+                    return t[0]["text"]["content"] if t else "Sem Nome"
+
+                leads.append({
+                    "id": r["id"],
+                    "empresa": get_title(),
+                    "site": props.get("Site Atual", {}).get("url", ""),
+                    "telefone": props.get("Telefone", {}).get("phone_number", ""),
+                    "diagnostico": get_text("Diagnóstico Gemini"),
+                    "link_wa": props.get("Link WhatsApp", {}).get("url", "")
+                })
+            return leads
+        else:
+            log(f"❌ Erro ao buscar leads: {res.status_code}", "error")
+            return []
+    except Exception as e:
+        log(f"❌ Exceção ao buscar leads: {e}", "error")
+        return []
+
+def atualizar_status_disparo(page_id):
+    """Atualiza o lead no Notion após o disparo: Disparo='Realizado', Status='Contactado'"""
+    url = f"https://api.notion.com/v1/pages/{page_id}"
+    
+    payload = {
+        "properties": {
+            "Disparo": { "select": { "name": "Realizado" } },
+            "Status de Contato": { "status": { "name": "Tentativa de contato" } }
+        }
+    }
+    
+    try:
+        res = requests.patch(url, headers=HEADERS, json=payload)
+        return res.status_code in [200, 202]
+    except Exception as e:
+        log(f"❌ Erro ao atualizar status: {e}", "error")
+        return False
+
+# --- 5. LOOP PRINCIPAL ---
+
+def processar_leads(arquivo_csv):
+    if not os.path.exists(arquivo_csv):
+        print("❌ Arquivo leads.csv não encontrado.")
+        return
+
+    try:
+        df = pd.read_csv(arquivo_csv)
+    except Exception as e:
+        print(f"❌ Erro ao ler o arquivo CSV: {e}")
+        return
+    print(f"🚀 Iniciando processamento de {len(df)} leads...")
+    erros = 0
+    processados = 0
+
+    for _, row in df.iterrows():
+        empresa = buscar_dado(row, 'empresa')
+        site = buscar_dado(row, 'site')
+        localizacao = buscar_dado(row, 'localizacao')
+        
+        if not empresa: continue
+
+        try:
+            page_id = verificar_duplicado(empresa, site, localizacao)
+            
+            if page_id:
+                msg_status = "Atualizando"
+            else:
+                msg_status = "Criando"
+
+            log(f"🔍 {msg_status}: {empresa}")
+            
+            status_ok = enviar_notion({
+                'empresa': empresa,
+                'site': site,
+                'telefone': buscar_dado(row, 'telefone'),
+                'email': buscar_dado(row, 'email'),
+                'status': buscar_dado(row, 'status'),
+                'tipo_negocio': categorizar_negocio(buscar_dado(row, 'tipo_negocio')),
+                'localizacao': localizacao,
+                'decisor': buscar_dado(row, 'decisor'),
+                'avaliacao': buscar_dado(row, 'avaliacao'),
+                'qtd_avaliacoes': buscar_dado(row, 'qtd_avaliacoes'),
+                'rid': gerar_rid(site, empresa),
+                'disparo': buscar_dado(row, 'disparo'),
+                'motivo': buscar_dado(row, 'motivo'),
+                'meio_contato': buscar_dado(row, 'meio_contato'),
+                'observacoes': buscar_dado(row, 'observacoes'),
+                'primeiro_contato': buscar_dado(row, 'primeiro_contato'),
+                'data_resposta': buscar_dado(row, 'data_resposta')
+            }, page_id=page_id)
+            
+            if not status_ok:
+                erros += 1
+            else:
+                processados += 1
+            
+            time.sleep(0.5) 
+        except Exception as e:
+            log(f"❌ Falha crítica no lead {empresa}: {e}", "error")
+            erros += 1
+
+    if erros > 0 and processados == 0:
+        log(f"⚠️ Processamento falhou totalmente ({erros} erros).", "error")
+        return False 
+    
+    log(f"🏁 Concluído: {processados} sucessos, {erros} falhas.")
+    return True 
+
+if __name__ == "__main__":
+    processar_leads("leads.csv")
