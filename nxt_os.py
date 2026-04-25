@@ -80,7 +80,7 @@ st.sidebar.info("v1.4.0 Beta — *Evolução Progressiva*")
 
 menu = st.sidebar.radio(
     "Navegação",
-    ["📊 Dashboard", "📥 Importação", "🎯 Disparos", "🔁 Follow Up", "🧬 Evolution History"],
+    ["📊 Dashboard", "📥 Importação", "🎯 Disparos", "🔁 Follow Up", "📈 Métricas", "🧬 Evolution History"],
     index=1
 )
 
@@ -107,7 +107,7 @@ def _find_status_candidate(contact_col: str, all_cols: list) -> int:
     return 0
 
 # ───────────────────────────── MÓDULO: DASHBOARD ─────────────────────────────
-if menu == "🏠 Dashboard":
+if menu == "📊 Dashboard":
     col_h1, col_h2 = st.columns([4, 1])
     with col_h1:
         st.title("🚀 NXT OS — Command Center")
@@ -764,7 +764,7 @@ elif menu == "🔁 Follow Up":
             st.divider()
 
 # ───────────────────────────── MÓDULO: MÉTRICAS ───────────────────────────────
-elif menu == "📊 Métricas":
+elif menu == "📈 Métricas":
     st.title("📊 Análise de Performance")
 
     col_sync, _ = st.columns([1, 3])
