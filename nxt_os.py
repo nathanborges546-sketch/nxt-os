@@ -822,4 +822,4 @@ elif menu == "📊 Métricas":
 
 
 st.sidebar.divider()
-st.sidebar.caption("NXT OS — Powered by Gemini 2.0 Flash")
+st.sidebar.caption("NXT - Build. Learn. Evolve.")
