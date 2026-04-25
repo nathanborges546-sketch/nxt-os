@@ -595,8 +595,17 @@ elif menu == "🎯 Disparos":
                                 if tipo in ["li", "ig"]:
                                     if st.button(f"📋 Script", key=f"scr_{tipo}_{lead.get('id')}", use_container_width=True):
                                         diag_limpo = str(lead.get('diagnostico')).replace('\n', ' ')[:200] if lead.get('diagnostico') else "análise técnica"
-                                        script_final = st.session_state.scripts_custom.get(tipo).replace("[Empresa]", lead.get('empresa')).replace("[Diagnóstico]", diag_limpo)
-                                        st.info(script_final)
+                                        # Mapeia as chaves curtas para as chaves do dicionário de scripts
+                                        map_canais = {"li": "linkedin", "ig": "instagram"}
+                                        canal_full = map_canais.get(tipo, tipo)
+                                        
+                                        script_base = st.session_state.scripts_custom.get(canal_full)
+                                        if script_base:
+                                            script_final = script_base.replace("[Empresa]", lead.get('empresa', 'Empresa')).replace("[Diagnóstico]", diag_limpo)
+                                            st.info(script_final)
+                                            st.code(script_final, language="text") # Facilita o copiar
+                                        else:
+                                            st.warning("⚠️ Script não encontrado.")
 
                         with cols[-1]:
                             if st.button(f"✅ Confirmar", key=f"conf_{lead.get('id')}", type="primary", use_container_width=True):
