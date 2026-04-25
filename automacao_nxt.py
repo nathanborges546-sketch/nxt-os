@@ -715,6 +715,20 @@ def enviar_notion_direto(row, page_id=None):
     if tipo and tipo != "Outros":
         propriedades["Tipo de Negócio"] = { "select": { "name": tipo } }
 
+    # Datas (Opcionais)
+    def formatar_data(d):
+        try:
+            return pd.to_datetime(d).strftime('%Y-%m-%d') if d and str(d).lower() != 'nan' else None
+        except: return None
+
+    p_contato = formatar_data(row.get("Primeiro Contato") or row.get("primeiro_contato"))
+    d_resposta = formatar_data(row.get("Data de Resposta") or row.get("data_resposta"))
+    
+    if p_contato:
+        propriedades["Primeiro Contato"] = { "date": { "start": p_contato } }
+    if d_resposta:
+        propriedades["Data da Resposta"] = { "date": { "start": d_resposta } }
+
     payload = {"properties": propriedades}
     if not page_id:
         payload["parent"] = {"database_id": DATABASE_ID}
@@ -723,8 +737,15 @@ def enviar_notion_direto(row, page_id=None):
     
     if res.status_code not in [200, 201, 202]:
         try:
-            err = res.json().get('message', 'Erro desconhecido')
-            log(f"❌ Erro Notion em {empresa}: {err}", "error")
+            resp_body = res.json()
+            msg_notion = resp_body.get('message', 'Erro desconhecido')
+            code_notion = resp_body.get('code', 'N/A')
+            
+            # Feedback específico para propriedades faltando
+            if "validation_error" in str(resp_body).lower():
+                log(f"❌ Erro de Validação no Notion: {msg_notion} (Verifique se as colunas no Notion têm os mesmos nomes e tipos)", "error")
+            else:
+                log(f"❌ Erro Notion ({code_notion}): {msg_notion}", "error")
         except:
             log(f"❌ Erro Notion em {empresa}: HTTP {res.status_code}", "error")
         return False

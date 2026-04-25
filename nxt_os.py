@@ -479,6 +479,7 @@ elif menu == "📥 Importação":
             
             if df_notion.empty:
                 st.warning("⚠️ Nenhum lead válido encontrado para envio.")
+                st.info("💡 Isso geralmente acontece porque a **Inteligência Outscraper** está ativa e não encontrou e-mails/telefones validados (Status: DELIVERABLE). Tente desmarcar a opção de inteligência se quiser enviar a base bruta.")
                 st.stop()
 
             progress_bar = st.progress(0)
