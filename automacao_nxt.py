@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 import logging
 import re
+import math
 import urllib.parse
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -646,12 +647,21 @@ def enviar_notion_direto(row, page_id=None):
         http_method = requests.post
 
     def limpar(v):
-        return str(v).strip() if v and str(v).lower() != 'nan' and str(v).lower() != 'none' else ""
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return ""
+        val = str(v).strip()
+        return val if val.lower() != 'nan' and val.lower() != 'none' else ""
 
     def limpar_select(v):
         """Remove vírgulas e limpa espaços para campos de seleção do Notion."""
         val = limpar(v)
         return val.replace(",", " ").strip() if val else ""
+
+    def json_safe(v):
+        """Garante que o valor seja serializável em JSON (remove NaN)."""
+        if isinstance(v, float) and math.isnan(v):
+            return None
+        return v
 
     # Mapeamento Direto das Colunas Purificadas
     empresa     = limpar(row.get("Empresa")) or "Sem Nome"
@@ -667,7 +677,9 @@ def enviar_notion_direto(row, page_id=None):
     rid         = limpar(row.get("RID")) or limpar(row.get("Diagnóstico Gemini"))
     
     try:
-        val_avaliacao = float(str(row.get('Avaliação', '0')).replace(',', '.'))
+        val_raw = str(row.get('Avaliação', '0')).replace(',', '.')
+        val_avaliacao = float(val_raw)
+        if math.isnan(val_avaliacao): val_avaliacao = 0.0
     except:
         val_avaliacao = 0.0
 
@@ -678,7 +690,7 @@ def enviar_notion_direto(row, page_id=None):
     propriedades = {
         "Empresa": { "title": [{ "text": { "content": empresa } }] },
         "Status de Contato": { "status": { "name": status_final } },
-        "Avaliação": { "number": val_avaliacao },
+        "Avaliação": { "number": json_safe(val_avaliacao) },
         "Site Atual": { "url": site if site else None },
         "Telefone": { "phone_number": telefone if telefone else None },
         "E-mail": { "email": email if email else None },
