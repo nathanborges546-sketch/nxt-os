@@ -401,6 +401,35 @@ def consolidar_contatos_outscraper(row):
     for rede in ["linkedin", "instagram", "facebook"]:
         if res[rede].lower() == "nan": res[rede] = ""
 
+    # --- 4. FALLBACK PARA COLUNAS MAPEADAS (Se a cascata falhar por colunas renomeadas) ---
+    if not email_valido:
+        e_mapped = row.get("E-mail") or row.get("email")
+        if e_mapped and str(e_mapped).lower() != "nan":
+            email_valido = str(e_mapped).strip()
+            
+    if not tel_valido:
+        t_mapped = row.get("Telefone") or row.get("telefone")
+        if t_mapped and str(t_mapped).lower() != "nan":
+            tel_limpo = "".join(filter(str.isdigit, str(t_mapped)))
+            if tel_limpo:
+                if not tel_limpo.startswith("55") and len(tel_limpo) >= 10:
+                    tel_valido = f"+55{tel_limpo}"
+                else:
+                    tel_valido = f"+{tel_limpo}"
+                    
+    if not res.get("linkedin"):
+        res["linkedin"] = str(row.get("LinkedIn", row.get("linkedin", ""))).strip()
+    if not res.get("instagram"):
+        res["instagram"] = str(row.get("Instagram", row.get("instagram", ""))).strip()
+    if not res.get("facebook"):
+        res["facebook"] = str(row.get("Facebook", row.get("facebook", ""))).strip()
+    if not decisor_valido:
+        decisor_valido = str(row.get("Decisor", row.get("Nome do Decisor", ""))).strip()
+
+    res["email"] = email_valido
+    res["telefone"] = tel_valido
+    res["decisor"] = decisor_valido if decisor_valido and decisor_valido.lower() != "nan" else None
+
     # Determinar Meio de Contato Inicial
     if email_valido:
         res["meio_contato"] = "E-mail"
@@ -409,6 +438,10 @@ def consolidar_contatos_outscraper(row):
     else:
         res["meio_contato"] = ""
         
+    # Limpeza final de "nan" em redes sociais
+    for r in ["linkedin", "instagram", "facebook"]:
+        if str(res.get(r)).lower() == "nan": res[r] = ""
+
     return res
 
 def executar_guilhotina(df, is_outscraper=False):

@@ -469,6 +469,10 @@ elif menu == "📥 Importação":
 
     with col_notion:
         if st.button("🚀 Enviar para o Notion", type="primary", use_container_width=True, key="imp_send_notion"):
+            if not auto.NOTION_TOKEN or not auto.DATABASE_ID:
+                st.error("❌ Credenciais do Notion não configuradas. Verifique o arquivo .env")
+                st.stop()
+                
             progress_bar = st.progress(0)
             status_text  = st.empty()
             total, sucessos = len(df_final), 0
@@ -479,6 +483,7 @@ elif menu == "📥 Importação":
                     out_cons = auto.consolidar_contatos_outscraper(row)
                     # Se não tiver nenhum contato válido na cascata, pulamos (descarte automático)
                     if not out_cons.get("email") and not out_cons.get("telefone"):
+                        st.caption(f"⏭️ Lead '{auto.buscar_dado(row, 'empresa')}' ignorado (sem contato válido).")
                         continue
                 
                 empresa = auto.buscar_dado(row, 'empresa')
