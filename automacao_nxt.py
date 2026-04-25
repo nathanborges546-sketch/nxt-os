@@ -633,7 +633,99 @@ def gerar_link_instagram(perfil_url):
         return None
     return str(perfil_url).strip()
 
+def enviar_notion_direto(row, page_id=None):
+    """
+    Versão simplificada e direta: Envia os dados para o Notion confiando
+    exclusivamente nas colunas purificadas do DataFrame.
+    """
+    if page_id:
+        url = f"https://api.notion.com/v1/pages/{page_id}"
+        http_method = requests.patch
+    else:
+        url = "https://api.notion.com/v1/pages"
+        http_method = requests.post
+
+    def limpar(v):
+        return str(v).strip() if v and str(v).lower() != 'nan' and str(v).lower() != 'none' else ""
+
+    def limpar_select(v):
+        """Remove vírgulas e limpa espaços para campos de seleção do Notion."""
+        val = limpar(v)
+        return val.replace(",", " ").strip() if val else ""
+
+    # Mapeamento Direto das Colunas Purificadas
+    empresa     = limpar(row.get("Empresa")) or "Sem Nome"
+    site        = limpar(row.get("Site Atual"))
+    email       = limpar(row.get("E-mail"))
+    telefone    = limpar(row.get("Telefone"))
+    linkedin    = limpar(row.get("LinkedIn"))
+    instagram   = limpar(row.get("Instagram"))
+    facebook    = limpar(row.get("Facebook"))
+    decisor     = limpar(row.get("Decisor"))
+    tipo        = limpar_select(row.get("Tipo de Negócio"))
+    localizacao = limpar(row.get("Localização"))
+    rid         = limpar(row.get("RID")) or limpar(row.get("Diagnóstico Gemini"))
+    
+    try:
+        val_avaliacao = float(str(row.get('Avaliação', '0')).replace(',', '.'))
+    except:
+        val_avaliacao = 0.0
+
+    # Status e Disparo (Padrões se vazios)
+    status_final = limpar(row.get("Status de Contato")) or "Não contactado"
+    disparo_final = limpar(row.get("Disparo")) or "Aguardando disparo"
+
+    propriedades = {
+        "Empresa": { "title": [{ "text": { "content": empresa } }] },
+        "Status de Contato": { "status": { "name": status_final } },
+        "Avaliação": { "number": val_avaliacao },
+        "Site Atual": { "url": site if site else None },
+        "Telefone": { "phone_number": telefone if telefone else None },
+        "E-mail": { "email": email if email else None },
+        "LinkedIn": { "url": linkedin if linkedin else None },
+        "Instagram": { "url": instagram if instagram else None },
+        "Facebook": { "url": facebook if facebook else None },
+        "Disparo": { "select": { "name": disparo_final } }
+    }
+
+    # Campos de Texto (Rich Text)
+    campos_texto = {
+        "Localização": localizacao,
+        "Nome do Decisor": decisor,
+        "Diagnóstico Gemini": rid
+    }
+    for nome, valor in campos_texto.items():
+        v_limpo = limpar(valor)
+        if v_limpo:
+            propriedades[nome] = { "rich_text": [{ "text": { "content": v_limpo[:2000] } }] }
+
+    # Tipo de Negócio (Select)
+    if tipo and tipo != "Outros":
+        propriedades["Tipo de Negócio"] = { "select": { "name": tipo } }
+
+    payload = {"properties": propriedades}
+    if not page_id:
+        payload["parent"] = {"database_id": DATABASE_ID}
+
+    res = http_method(url, headers=HEADERS, json=payload)
+    
+    if res.status_code not in [200, 201, 202]:
+        try:
+            err = res.json().get('message', 'Erro desconhecido')
+            log(f"❌ Erro Notion em {empresa}: {err}", "error")
+        except:
+            log(f"❌ Erro Notion em {empresa}: HTTP {res.status_code}", "error")
+        return False
+    
+    log(f"✅ {empresa} {'atualizada' if page_id else 'criada'} com sucesso.")
+    return True
+
 def enviar_notion(dados, page_id=None):
+    # Mantemos por compatibilidade, mas redirecionamos para o novo fluxo direto
+    # se as chaves forem as novas (Capitalizadas)
+    if "Empresa" in dados:
+        return enviar_notion_direto(dados, page_id)
+        
     if page_id:
         url = f"https://api.notion.com/v1/pages/{page_id}"
         http_method = requests.patch

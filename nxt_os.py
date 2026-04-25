@@ -454,8 +454,9 @@ elif menu == "📥 Importação":
     
     # ══ MÉTRICAS DE QUALIDADE ══
     if is_outscraper:
-        valid_contacts = sum(1 for _, row in df_final.iterrows() if auto.consolidar_contatos_outscraper(row).get("email") or auto.consolidar_contatos_outscraper(row).get("telefone"))
-        m4.metric("🔥 Contatos Validados", valid_contacts)
+        # Usa a função de purificação final para contar quantos realmente têm contato válido
+        df_valido = auto.processar_df_final(df_final, is_outscraper=True)
+        m4.metric("🔥 Contatos Validados", len(df_valido))
     
     st.dataframe(df_final.head(10), use_container_width=True)
 
@@ -473,57 +474,33 @@ elif menu == "📥 Importação":
                 st.error("❌ Credenciais do Notion não configuradas. Verifique o arquivo .env")
                 st.stop()
                 
+            # Prepara a base final (aplica cascata se necessário)
+            df_notion = auto.processar_df_final(df_final, is_outscraper=is_outscraper)
+            
+            if df_notion.empty:
+                st.warning("⚠️ Nenhum lead válido encontrado para envio.")
+                st.stop()
+
             progress_bar = st.progress(0)
             status_text  = st.empty()
-            total, sucessos = len(df_final), 0
-            for i, (_, row) in enumerate(df_final.iterrows()):
-                # Se for Outscraper, usamos a lógica de cascata primeiro
-                out_cons = {}
-                if is_outscraper:
-                    out_cons = auto.consolidar_contatos_outscraper(row)
-                    # Se não tiver nenhum contato válido na cascata, pulamos (descarte automático)
-                    if not out_cons.get("email") and not out_cons.get("telefone"):
-                        st.caption(f"⏭️ Lead '{auto.buscar_dado(row, 'empresa')}' ignorado (sem contato válido).")
-                        continue
+            total, sucessos = len(df_notion), 0
+            
+            for i, (_, row) in enumerate(df_notion.iterrows()):
+                empresa = row.get('Empresa', 'Lead')
+                status_text.text(f"Integrando {i+1}/{total}: {empresa}")
                 
-                empresa = auto.buscar_dado(row, 'empresa')
-                site    = auto.buscar_dado(row, 'site')
+                # Verifica duplicado
+                page_id = auto.verificar_duplicado(row.get('Empresa'), row.get('Site Atual'), row.get('Localização'))
                 
-                # Se for Outscraper, prioriza os dados consolidados
-                tel_final   = out_cons.get("telefone") if is_outscraper else auto.buscar_dado(row, 'telefone')
-                email_final = out_cons.get("email") if is_outscraper else auto.buscar_dado(row, 'email')
-                decisor_final = out_cons.get("decisor") if is_outscraper else auto.buscar_dado(row, 'decisor')
-                meio_final  = out_cons.get("meio_contato") if is_outscraper else auto.buscar_dado(row, 'meio_contato')
-
-                status_text.text(f"Integrando {i+1}/{total}: {empresa or 'Lead'}")
-                lead_data = {
-                    'empresa':       empresa,
-                    'site':          site,
-                    'telefone':      tel_final,
-                    'email':         email_final,
-                    'status':        auto.buscar_dado(row, 'status'),
-                    'tipo_negocio':  auto.categorizar_negocio(auto.buscar_dado(row, 'tipo_negocio')),
-                    'localizacao':   auto.buscar_dado(row, 'localizacao'),
-                    'decisor':       decisor_final,
-                    'avaliacao':     auto.buscar_dado(row, 'avaliacao'),
-                    'qtd_avaliacoes':auto.buscar_dado(row, 'qtd_avaliacoes'),
-                    'rid':           auto.gerar_rid(site, empresa),
-                    'disparo':       auto.buscar_dado(row, 'disparo'),
-                    'motivo':        auto.buscar_dado(row, 'motivo'),
-                    'meio_contato':  meio_final,
-                    'observacoes':   auto.buscar_dado(row, 'observacoes'),
-                    'primeiro_contato': auto.buscar_dado(row, 'primeiro_contato'),
-                    'data_resposta': auto.buscar_dado(row, 'data_resposta'),
-                    'linkedin':      out_cons.get("linkedin") if is_outscraper else auto.buscar_dado(row, 'linkedin'),
-                    'instagram':     out_cons.get("instagram") if is_outscraper else auto.buscar_dado(row, 'instagram'),
-                    'facebook':      out_cons.get("facebook") if is_outscraper else auto.buscar_dado(row, 'facebook'),
-                }
-                page_id = auto.verificar_duplicado(lead_data['empresa'], lead_data['site'], lead_data['localizacao'])
-                if auto.enviar_notion(lead_data, page_id=page_id):
+                if auto.enviar_notion_direto(row, page_id=page_id):
                     sucessos += 1
+                
                 progress_bar.progress((i + 1) / total)
+                
             status_text.empty()
-            st.success(f"🏁 Concluído! {sucessos}/{total} leads enviados ao Notion.")
+            st.success(f"🏁 Integração Concluída: {sucessos} leads processados com sucesso!")
+            time.sleep(2)
+            st.rerun()
 
     try:
         pass
