@@ -76,7 +76,7 @@ st.markdown("""
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/rocket.png", width=60)
     st.title("NXT OS")
-    st.caption("v1.0 · Senior Edition")
+    st.caption("v1.4 · Beta")
     st.divider()
     menu = st.radio(
         "Menu Principal",
