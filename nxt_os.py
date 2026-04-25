@@ -836,7 +836,7 @@ elif menu == "🧬 Evolution History":
     st.title("🧬 NXT OS — Evolução Progressiva")
     st.caption("Acompanhe o histórico de alterações, marcos e o crescimento do sistema.")
     
-    path_changelog = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "CHANGELOG.md")
+    path_changelog = os.path.join(os.path.dirname(os.path.abspath(__file__)), "CHANGELOG.md")
     
     if os.path.exists(path_changelog):
         with open(path_changelog, "r", encoding="utf-8") as f:
