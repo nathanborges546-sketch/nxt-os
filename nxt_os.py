@@ -73,16 +73,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ───────────────────────────── Sidebar & Navegação ────────────────────────────
-with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/rocket.png", width=60)
-    st.title("NXT OS")
-    st.caption("v1.4 · Beta")
-    st.divider()
-    menu = st.radio(
-        "Menu Principal",
-        ["🏠 Dashboard", "📥 Importação", "🎯 Disparos", "🔁 Follow Up", "📊 Métricas"],
-        index=1
-    )
+# ── Sidebar: Menu e Info ──
+st.sidebar.image("https://nxt-leads.vercel.app/logo-nxt.png", width=150)
+st.sidebar.markdown("### 🛰️ NXT OS")
+st.sidebar.info("v1.4.0 Beta — *Evolução Progressiva*")
+
+menu = st.sidebar.radio(
+    "Navegação",
+    ["📊 Dashboard", "📥 Importação", "🎯 Disparos", "🔁 Follow Up", "🧬 Evolution History"],
+    index=1
+)
+
+st.sidebar.divider()
 
 # ─── HELPERS DO PURIFIER ────────────────────────────────────────────────────
 def _find_status_candidate(contact_col: str, all_cols: list) -> int:
@@ -829,6 +831,20 @@ elif menu == "📊 Métricas":
             else:
                 st.caption("Sem dados de canais registrados.")
 
+# ───────────────────────────── MÓDULO: EVOLUTION HISTORY ─────────────────────
+elif menu == "🧬 Evolution History":
+    st.title("🧬 NXT OS — Evolução Progressiva")
+    st.caption("Acompanhe o histórico de alterações, marcos e o crescimento do sistema.")
+    
+    path_changelog = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "CHANGELOG.md")
+    
+    if os.path.exists(path_changelog):
+        with open(path_changelog, "r", encoding="utf-8") as f:
+            content = f.read()
+        st.markdown(content)
+    else:
+        st.warning("⚠️ Arquivo CHANGELOG.md não encontrado no diretório raiz.")
+        st.info("O sistema está atualmente na versão v1.4.0 Beta.")
 
 st.sidebar.divider()
 st.sidebar.caption("NXT - Build. Learn. Evolve.")
