@@ -74,7 +74,7 @@ st.markdown("""
 
 # ───────────────────────────── Sidebar & Navegação ────────────────────────────
 # ── Sidebar: Menu e Info ──
-st.sidebar.image(os.path.join(os.path.dirname(__file__), "..", "..", "assets", "branding", "nxt_logo_white.png"), width=150)
+st.sidebar.image(os.path.join(os.path.dirname(__file__), "nxt_logo_white.png"), width=150)
 st.sidebar.markdown("### 🛰️ NXT OS")
 st.sidebar.info("v1.4.0 Beta — *Evolução Progressiva*")
 
