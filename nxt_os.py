@@ -69,6 +69,9 @@ st.markdown("""
         border-radius: 4px;
         font-size: 0.8em;
     }
+    [data-testid="stSidebarNav"] img, [data-testid="stSidebar"] img {
+        padding: 5px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
