@@ -1008,7 +1008,10 @@ def buscar_leads_follow_up():
         return t[0]["text"]["content"] if t else "Sem Nome"
 
     def _get_status(props):
-        return props.get("Status de Contato", {}).get("status", {}).get("name", "")
+        p = props.get("Status de Contato")
+        if not p: return ""
+        status = p.get("status")
+        return status.get("name", "") if status else ""
 
     def _get_date(props, field):
         d = props.get(field, {}).get("date")
@@ -1020,13 +1023,20 @@ def buscar_leads_follow_up():
             log(f"❌ buscar_leads_follow_up: HTTP {res.status_code} — {res.text[:200]}", "error")
             return []
 
+        def _get_select(props, field):
+            p = props.get(field)
+            if not p: return ""
+            sel = p.get("select")
+            return sel.get("name", "") if sel else ""
+
         leads = []
         for r in res.json().get("results", []):
             props    = r.get("properties", {})
             email    = props.get("E-mail", {}).get("email", "")
             linkedin = props.get("LinkedIn", {}).get("url", "")
             instagram= props.get("Instagram", {}).get("url", "")
-            meio     = props.get("Meio de Contato", {}).get("select", {}).get("name", "")
+            meio     = _get_select(props, "Meio de Contato")
+            
             leads.append({
                 "id":              r["id"],
                 "empresa":         _get_title(props),
