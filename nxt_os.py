@@ -610,12 +610,21 @@ elif menu == "🎯 Disparos":
                                             st.warning("⚠️ Script não encontrado.")
 
                         with cols[-1]:
-                            if st.button(f"✅ Confirmar", key=f"conf_{lead.get('id')}", type="primary", use_container_width=True):
-                                if auto.atualizar_status_disparo(lead.get('id')):
-                                    st.toast(f"🚀 {lead.get('empresa')} marcado como 'Tentativa de contato'!")
-                                    time.sleep(0.5)
-                                    st.session_state.leads_prospeccao = [l for l in st.session_state.leads_prospeccao if l.get('id') != lead.get('id')]
-                                    st.rerun()
+                            with st.popover("✅ Confirmar", use_container_width=True):
+                                st.markdown(f"**{lead.get('empresa')}**")
+                                st.caption("Registre o canal utilizado antes de confirmar.")
+                                escolha_meio = st.selectbox(
+                                    "Por onde você contactou?",
+                                    ["WhatsApp", "Instagram", "LinkedIn", "E-mail", "Ligação"],
+                                    key=f"meio_{lead.get('id')}"
+                                )
+                                if st.button("📝 Registrar e Salvar", key=f"conf_{lead.get('id')}", type="primary", use_container_width=True):
+                                    if auto.atualizar_status_disparo(lead.get('id'), meio_contato=escolha_meio):
+                                        st.toast(f"🚀 {lead.get('empresa')} → '{escolha_meio}' registrado como 'Tentativa de contato'!")
+                                        time.sleep(0.5)
+                                        st.session_state.leads_prospeccao = [l for l in st.session_state.leads_prospeccao if l.get('id') != lead.get('id')]
+                                        st.rerun()
+
                     else:
                         st.warning("⚠️ Nenhum canal de contato disponível para este lead.")
                         if st.button(f"✅ Marcar como Contactado (Manual)", key=f"man_{lead['id']}"):

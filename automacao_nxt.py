@@ -936,11 +936,12 @@ def buscar_leads_notion():
         log(f"❌ Exceção ao buscar leads: {e}", "error")
         return []
 
-def atualizar_status_disparo(page_id):
+def atualizar_status_disparo(page_id, meio_contato=""):
     """Atualiza o lead após o disparo:
     - Disparo            → 'Realizado'
     - Status de Contato  → 'Tentativa de contato'
     - Primeiro Contato   → data de HOJE (ISO 8601)
+    - Meio de Contato    → canal usado no disparo (opcional)
     """
     url = f"https://api.notion.com/v1/pages/{page_id}"
     hoje = datetime.now().strftime("%Y-%m-%d")
@@ -952,6 +953,9 @@ def atualizar_status_disparo(page_id):
             "Primeiro Contato":  { "date":   { "start": hoje } }
         }
     }
+
+    if meio_contato:
+        payload["properties"]["Meio de Contato"] = { "select": { "name": meio_contato } }
 
     try:
         res = requests.patch(url, headers=HEADERS, json=payload)
