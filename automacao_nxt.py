@@ -52,12 +52,23 @@ try:
     
     @_cache_data(ttl=86400)
     def validar_whatsapp_api(numero):
-        """Verifica se o número possui conta no WhatsApp via Evolution API."""
-        if not numero:
+        """Verifica se o número possui conta no WhatsApp via Evolution API.
+        Lógica Ultra-Robusta: limpa, formata DDI e usa fallback de segurança.
+        """
+        if not numero or str(numero).lower() in ['none', '']:
             return False
         
-        # Limpa o número para deixar apenas dígitos
-        numero_limpo = "".join(filter(str.isdigit, str(numero)))
+        # 1. Limpeza: apenas dígitos
+        numero_limpo = re.sub(r'\D', '', str(numero))
+        
+        # 2. Tratamento de prefixos e zeros
+        if numero_limpo.startswith('0'):
+            numero_limpo = numero_limpo.lstrip('0')
+            
+        # Adiciona 55 (Brasil) se o número parece ser nacional (10 ou 11 dígitos)
+        if 10 <= len(numero_limpo) <= 11 and not numero_limpo.startswith('55'):
+            numero_limpo = '55' + numero_limpo
+            
         if not numero_limpo:
             return False
             
@@ -70,11 +81,14 @@ try:
             if res.status_code in [200, 201]:
                 dados = res.json()
                 if isinstance(dados, list) and len(dados) > 0:
+                    # Retorna o status real da API
                     return dados[0].get("exists", False)
-            return False
-        except Exception as e:
-            # Em modo estrito, se a API falhar ou estiver offline, não mostramos o botão
-            return False
+            
+            # Fallback: Se o status_code não for sucesso, assume True para não perder o lead
+            return True
+        except Exception:
+            # Fallback: Em caso de erro técnico/timeout, mantém o lead na fila
+            return True
 
     @_cache_data(ttl=3600)
     def buscar_dados_completos():

@@ -648,18 +648,27 @@ st.download_button(
 )
 
 def executar_guilhotina(df):
-    """Critério de Exclusão: Remove linhas sem e-mail ou telefone."""
+    """Critério de Exclusão: Remove linhas sem e-mail ou telefone.
+    Limpa caracteres especiais do telefone antes de verificar se está vazio.
+    """
     before = len(df)
-    # Procura colunas de email e telefone (mesmo renomeadas)
+    # Procura colunas de email e telefone
     col_email = next((c for c in df.columns if "email" in c.lower()), None)
     col_tel = next((c for c in df.columns if "tele" in c.lower() or "phone" in c.lower() or "whats" in c.lower()), None)
     
     if not col_email and not col_tel:
         return df, 0
         
-    mask = df.apply(lambda row: (pd.notnull(row.get(col_email)) and str(row.get(col_email)).strip() != "") or 
-                                (pd.notnull(row.get(col_tel)) and str(row.get(col_tel)).strip() != ""), axis=1)
-    df_clean = df[mask].copy()
+    def has_contact(row):
+        email = str(row.get(col_email, "")).strip() if col_email else ""
+        tel = str(row.get(col_tel, "")).strip() if col_tel else ""
+        
+        # Limpeza robusta do telefone para validar se há conteúdo real
+        tel_limpo = re.sub(r'\D', '', tel)
+        
+        return (email != "" and email.lower() != "nan") or (tel_limpo != "")
+
+    df_clean = df[df.apply(has_contact, axis=1)].copy()
     return df_clean, before - len(df_clean)
 
 st.caption("NXT Purifier · Processamento local · Dados nunca saem da máquina.")
