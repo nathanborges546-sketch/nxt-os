@@ -745,10 +745,18 @@ elif menu == "🔁 Follow Up":
 
             with col_wa:
                 meio = lead.get("meio_contato", "")
+                
+                # Gera o link dinâmico de WhatsApp para uso em vários lugares
+                link_wa_dinamico = auto.criar_link_whatsapp(
+                    lead.get('telefone'), 
+                    lead.get('empresa'), 
+                    lead.get('diagnostico'), 
+                    st.session_state.scripts_custom.get("whatsapp")
+                )
 
                 if meio == "WhatsApp":
-                    if lead.get("link_wa"):
-                        st.link_button("📲 WhatsApp", lead["link_wa"], use_container_width=True)
+                    if link_wa_dinamico:
+                        st.link_button("📲 WhatsApp", link_wa_dinamico, use_container_width=True)
                     else:
                         st.button("📲 Sem Tel.", disabled=True, key=f"fu_notel_{lead['id']}")
 
@@ -781,8 +789,8 @@ elif menu == "🔁 Follow Up":
                     # Fallback: sem meio registrado — exibe popover com todos os canais disponíveis
                     with st.popover("📡 Canais", use_container_width=True):
                         st.caption("Meio de contato não registrado. Escolha um canal:")
-                        if lead.get("link_wa"):
-                            st.link_button("📲 WhatsApp", lead["link_wa"], use_container_width=True)
+                        if link_wa_dinamico:
+                            st.link_button("📲 WhatsApp", link_wa_dinamico, use_container_width=True)
                         if lead.get("link_ig"):
                             st.link_button("📸 Instagram", lead["link_ig"], use_container_width=True)
                         if lead.get("link_li"):
