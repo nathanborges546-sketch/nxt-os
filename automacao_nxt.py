@@ -1032,6 +1032,7 @@ def buscar_leads_follow_up():
         leads = []
         for r in res.json().get("results", []):
             props    = r.get("properties", {})
+            telefone = props.get("Telefone", {}).get("phone_number", "")
             email    = props.get("E-mail", {}).get("email", "")
             linkedin = props.get("LinkedIn", {}).get("url", "")
             instagram= props.get("Instagram", {}).get("url", "")
