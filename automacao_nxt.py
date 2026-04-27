@@ -1022,17 +1022,25 @@ def buscar_leads_follow_up():
 
         leads = []
         for r in res.json().get("results", []):
-            props = r.get("properties", {})
+            props    = r.get("properties", {})
+            email    = props.get("E-mail", {}).get("email", "")
+            linkedin = props.get("LinkedIn", {}).get("url", "")
+            instagram= props.get("Instagram", {}).get("url", "")
+            meio     = props.get("Meio de Contato", {}).get("select", {}).get("name", "")
             leads.append({
                 "id":              r["id"],
                 "empresa":         _get_title(props),
                 "site":            props.get("Site Atual", {}).get("url", ""),
                 "telefone":        props.get("Telefone", {}).get("phone_number", ""),
-                "email":           props.get("E-mail", {}).get("email", ""),
-                "linkedin":        props.get("LinkedIn", {}).get("url", ""),
-                "instagram":       props.get("Instagram", {}).get("url", ""),
+                "email":           email,
+                "linkedin":        linkedin,
+                "instagram":       instagram,
                 "diagnostico":     _get_text(props, "Diagnóstico Gemini"),
                 "link_wa":         props.get("Link WhatsApp", {}).get("url", ""),
+                "link_mail":       f"mailto:{email}" if email else "",
+                "link_li":         linkedin,
+                "link_ig":         instagram,
+                "meio_contato":    meio,
                 "status":          _get_status(props),
                 "primeiro_contato":_get_date(props, "Primeiro Contato"),
             })

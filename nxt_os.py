@@ -733,6 +733,7 @@ elif menu == "🔁 Follow Up":
                     <div style="color:#aaa;font-size:0.85em;margin-top:6px;">
                         📅 Primeiro contato: <b>{lead['primeiro_contato'] or 'Não registrado'}</b>
                         &nbsp;·&nbsp; ⏱ {dias_passados} dia(s) atrás
+                        {f"&nbsp;·&nbsp; 📡 <b>Último contato via: {lead['meio_contato']}</b>" if lead.get('meio_contato') else ""}
                     </div>
                     <div style="color:#bbb;font-size:0.85em;margin-top:8px;font-style:italic;">
                         {lead['diagnostico'][:180] + '...' if lead['diagnostico'] and len(lead['diagnostico']) > 180 else lead['diagnostico'] or 'Diagnóstico não disponível.'}
@@ -743,13 +744,54 @@ elif menu == "🔁 Follow Up":
             col_wa, col_sel = st.columns([1, 2])
 
             with col_wa:
-                if lead["link_wa"]:
-                    st.link_button("📲 WhatsApp", lead["link_wa"],
-                                   help="Abre o WhatsApp Web/App.")
+                meio = lead.get("meio_contato", "")
+
+                if meio == "WhatsApp":
+                    if lead.get("link_wa"):
+                        st.link_button("📲 WhatsApp", lead["link_wa"], use_container_width=True)
+                    else:
+                        st.button("📲 Sem Tel.", disabled=True, key=f"fu_notel_{lead['id']}")
+
+                elif meio == "Instagram":
+                    if lead.get("link_ig"):
+                        st.link_button("📸 Instagram", lead["link_ig"], use_container_width=True)
+                    else:
+                        st.button("📸 Sem IG", disabled=True, key=f"fu_noig_{lead['id']}")
+
+                elif meio == "LinkedIn":
+                    if lead.get("link_li"):
+                        st.link_button("👔 LinkedIn", lead["link_li"], use_container_width=True)
+                    else:
+                        st.button("👔 Sem LI", disabled=True, key=f"fu_noli_{lead['id']}")
+
+                elif meio == "E-mail":
+                    if lead.get("link_mail"):
+                        st.link_button("📧 E-mail", lead["link_mail"], use_container_width=True)
+                    else:
+                        st.button("📧 Sem e-mail", disabled=True, key=f"fu_nomail_{lead['id']}")
+
+                elif meio == "Ligação":
+                    tel = lead.get("telefone", "")
+                    if tel:
+                        st.link_button("📞 Ligar", f"tel:{tel}", use_container_width=True)
+                    else:
+                        st.button("📞 Sem Tel.", disabled=True, key=f"fu_nocall_{lead['id']}")
+
                 else:
-                    st.button("📲 Sem Tel.", disabled=True, key=f"fu_notel_{lead['id']}")
+                    # Fallback: sem meio registrado — exibe popover com todos os canais disponíveis
+                    with st.popover("📡 Canais", use_container_width=True):
+                        st.caption("Meio de contato não registrado. Escolha um canal:")
+                        if lead.get("link_wa"):
+                            st.link_button("📲 WhatsApp", lead["link_wa"], use_container_width=True)
+                        if lead.get("link_ig"):
+                            st.link_button("📸 Instagram", lead["link_ig"], use_container_width=True)
+                        if lead.get("link_li"):
+                            st.link_button("👔 LinkedIn", lead["link_li"], use_container_width=True)
+                        if lead.get("link_mail"):
+                            st.link_button("📧 E-mail", lead["link_mail"], use_container_width=True)
 
             with col_sel:
+
                 escolha = st.selectbox(
                     "Atualizar status",
                     options=OPCOES_RESPOSTA,
