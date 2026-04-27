@@ -70,7 +70,7 @@ st.markdown("""
         font-size: 0.8em;
     }
     [data-testid="stSidebarNav"] img, [data-testid="stSidebar"] img {
-        padding: 5px;
+        padding: 15px;
     }
     </style>
 """, unsafe_allow_html=True)
