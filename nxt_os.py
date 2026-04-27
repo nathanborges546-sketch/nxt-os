@@ -586,7 +586,10 @@ elif menu == "🎯 Disparos":
 
                     # ── Determinar quais botões exibir ──
                     botoes_ativos = []
-                    if link_wa: botoes_ativos.append(("wa", "📲 WhatsApp", link_wa))
+                    if link_wa:
+                        if auto.validar_whatsapp_api(lead.get('telefone')):
+                            botoes_ativos.append(("wa", "📲 WhatsApp", link_wa))
+                    
                     if link_em: botoes_ativos.append(("em", "📧 E-mail", link_em))
                     if link_li: botoes_ativos.append(("li", "🔗 LinkedIn", link_li))
                     if link_ig: botoes_ativos.append(("ig", "📸 Instagram", link_ig))
@@ -754,10 +757,14 @@ elif menu == "🔁 Follow Up":
                 )
 
                 if meio == "WhatsApp":
-                    if link_wa_dinamico:
+                    if link_wa_dinamico and auto.validar_whatsapp_api(lead.get('telefone')):
                         st.link_button("📲 WhatsApp", link_wa_dinamico, use_container_width=True)
                     else:
-                        st.button("📲 Sem Tel.", disabled=True, key=f"fu_notel_{lead['id']}")
+                        st.caption("⚠️ Número sem WhatsApp detectado")
+                        with st.popover("📡 Canais Alternativos", use_container_width=True):
+                            if lead.get("link_ig"): st.link_button("📸 Instagram", lead["link_ig"], use_container_width=True)
+                            if lead.get("link_li"): st.link_button("👔 LinkedIn", lead["link_li"], use_container_width=True)
+                            if lead.get("link_mail"): st.link_button("📧 E-mail", lead["link_mail"], use_container_width=True)
 
                 elif meio == "Instagram":
                     if lead.get("link_ig"):

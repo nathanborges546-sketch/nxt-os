@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 import io
 import re
+import automacao_nxt as auto
 
 # ───────────────────────────── Configuração da Página ─────────────────────────
 st.set_page_config(
@@ -444,6 +445,14 @@ if consol_rules_valid:
             key="consol_guillotine_col",
             help="A guilhotina remove linhas apenas com base nesta coluna.",
         )
+    
+    st.markdown("---")
+    pre_validate_wa = st.checkbox(
+        "🛡️ Pré-validar WhatsApp (Evolution API)",
+        value=False,
+        key="consol_pre_validate_wa",
+        help="Verifica via API se o número existe no WhatsApp. Descarta o lead se for inválido. (Requer conexão estável)",
+    )
 
 # ── 6d. Execução em massa (Coalescência de Elite) ──
 if consol_rules_valid:
@@ -553,6 +562,20 @@ if consol_rules_valid:
 
         post_guillotine = len(df_consolidated)
 
+        # Validação de WhatsApp (Evolution API)
+        total_wa_invalid = 0
+        if pre_validate_wa:
+            with st.spinner("🛡️ Validando contas de WhatsApp via Evolution API..."):
+                # Procura coluna de telefone para validar
+                col_tel = next((c for c in df_consolidated.columns if "tele" in c.lower() or "phone" in c.lower() or "whats" in c.lower()), None)
+                if col_tel:
+                    initial_len = len(df_consolidated)
+                    # Aplica a validação linha a linha (o cache do Streamlit ajuda aqui)
+                    df_consolidated = df_consolidated[df_consolidated[col_tel].apply(lambda x: auto.validar_whatsapp_api(x) if pd.notnull(x) and str(x).strip() != "" else False)]
+                    total_wa_invalid = initial_len - len(df_consolidated)
+                else:
+                    st.warning("⚠️ Coluna de telefone não encontrada para pré-validação.")
+
         # Persistir no session_state
         st.session_state["_consol_applied"] = True
         st.session_state["_consol_df"] = df_consolidated.copy()
@@ -560,6 +583,7 @@ if consol_rules_valid:
         st.session_state["_consol_dropped"] = pre_guillotine - post_guillotine
         st.session_state["_consol_promoted"] = total_promoted
         st.session_state["_consol_discarded"] = total_discarded_cells
+        st.session_state["_consol_wa_invalid"] = total_wa_invalid
         st.rerun()
 
 # ── 6e. Recuperar estado após rerun ──
@@ -580,6 +604,9 @@ if st.session_state.get("_consol_applied"):
         mc3.metric("🔪 Linhas Guilhotinadas", f"{dropped:,}", help="Linhas removidas por ficarem sem contato.")
     elif dropped > 0:
         st.info(f"🔪 Guilhotina removeu **{dropped:,}** linhas sem contato.")
+    
+    if st.session_state.get("_consol_wa_invalid", 0) > 0:
+        st.warning(f"🛡️ Evolution API descartou **{st.session_state['_consol_wa_invalid']:,}** leads sem conta no WhatsApp.")
 
     st.markdown("**Pré-visualização após consolidação:**")
     st.dataframe(df_consolidated.head(8), use_container_width=True)
