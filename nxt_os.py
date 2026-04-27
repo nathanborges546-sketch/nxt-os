@@ -722,24 +722,20 @@ elif menu == "🔁 Follow Up":
             status_cor = "#e67e22" if lead["status"] == "Follow up" else "#3498db"
             urgencia   = "🔴" if dias_passados >= 10 else ("🟡" if dias_passados >= 5 else "🟢")
 
-            st.markdown(f"""
-                <div style="background:#1e1e1e;padding:16px;border-radius:10px;
-                            border-left:4px solid {status_cor};margin-bottom:12px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span style="font-size:1.1em;font-weight:bold;color:#fff;">{urgencia} {lead['empresa']}</span>
-                        <span style="background:{status_cor};color:#fff;padding:3px 10px;
-                               border-radius:4px;font-size:0.8em;">{lead['status']}</span>
-                    </div>
-                    <div style="color:#aaa;font-size:0.85em;margin-top:6px;">
-                        📅 Primeiro contato: <b>{lead['primeiro_contato'] or 'Não registrado'}</b>
-                        &nbsp;·&nbsp; ⏱ {dias_passados} dia(s) atrás
-                        {f"&nbsp;·&nbsp; 📡 <b>Último contato via: {lead['meio_contato']}</b>" if lead.get('meio_contato') else ""}
-                    </div>
-                    <div style="color:#bbb;font-size:0.85em;margin-top:8px;font-style:italic;">
-                        {lead['diagnostico'][:180] + '...' if lead['diagnostico'] and len(lead['diagnostico']) > 180 else lead['diagnostico'] or 'Diagnóstico não disponível.'}
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div style="background:#1e1e1e;padding:16px;border-radius:10px;border-left:4px solid {status_cor};margin-bottom:12px;">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<span style="font-size:1.1em;font-weight:bold;color:#fff;">{urgencia} {lead['empresa']}</span>
+<span style="background:{status_cor};color:#fff;padding:3px 10px;border-radius:4px;font-size:0.8em;">{lead['status']}</span>
+</div>
+<div style="color:#aaa;font-size:0.85em;margin-top:6px;">
+📅 Primeiro contato: <b>{lead['primeiro_contato'] or 'Não registrado'}</b>
+&nbsp;·&nbsp; ⏱ {dias_passados} dia(s) atrás
+{f"&nbsp;·&nbsp; 📡 <b>Último contato via: {lead['meio_contato']}</b>" if lead.get('meio_contato') else ""}
+</div>
+<div style="color:#bbb;font-size:0.85em;margin-top:8px;font-style:italic;">
+{lead['diagnostico'][:180] + '...' if lead['diagnostico'] and len(lead['diagnostico']) > 180 else lead['diagnostico'] or 'Diagnóstico não disponível.'}
+</div>
+</div>""", unsafe_allow_html=True)
 
             col_wa, col_sel = st.columns([1, 2])
 
