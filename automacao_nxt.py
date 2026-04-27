@@ -41,9 +41,40 @@ try:
 except Exception:
     pass  # Streamlit não disponível (ex: script CLI)
 
+# --- 1.5 CONFIGURAÇÃO EVOLUTION API (WHATSAPP VALIDATOR) ---
+EVO_URL = "http://217.76.61.47"
+EVO_KEY = "NXT_ADMIN_KEY"
+INSTANCE = "nxt1"
+
 # ── Cache de dados para Dashboard/Métricas ──────────────────────────────────
 try:
     from streamlit import cache_data as _cache_data
+    
+    @_cache_data(ttl=86400)
+    def validar_whatsapp_api(numero):
+        """Verifica se o número possui conta no WhatsApp via Evolution API."""
+        if not numero:
+            return False
+        
+        # Limpa o número para deixar apenas dígitos
+        numero_limpo = "".join(filter(str.isdigit, str(numero)))
+        if not numero_limpo:
+            return False
+            
+        url = f"{EVO_URL}/chat/whatsappNumbers/{INSTANCE}"
+        payload = {"numbers": [numero_limpo]}
+        headers = {"apikey": EVO_KEY, "Content-Type": "application/json"}
+
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=5)
+            if res.status_code in [200, 201]:
+                dados = res.json()
+                if isinstance(dados, list) and len(dados) > 0:
+                    return dados[0].get("exists", False)
+            return False
+        except Exception as e:
+            # Se a API falhar, retornamos True para não perder o lead por erro técnico
+            return True
 
     @_cache_data(ttl=3600)
     def buscar_dados_completos():
