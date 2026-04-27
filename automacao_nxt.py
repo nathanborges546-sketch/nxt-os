@@ -73,8 +73,8 @@ try:
                     return dados[0].get("exists", False)
             return False
         except Exception as e:
-            # Se a API falhar, retornamos True para não perder o lead por erro técnico
-            return True
+            # Em modo estrito, se a API falhar ou estiver offline, não mostramos o botão
+            return False
 
     @_cache_data(ttl=3600)
     def buscar_dados_completos():
@@ -956,8 +956,7 @@ def buscar_leads_notion():
                     "email": props.get("E-mail", {}).get("email", ""),
                     "linkedin": props.get("LinkedIn", {}).get("url", ""),
                     "instagram": props.get("Instagram", {}).get("url", ""),
-                    "diagnostico": get_text("Diagnóstico Gemini"),
-                    "link_wa": props.get("Link WhatsApp", {}).get("url", "")
+                    "diagnostico": get_text("Diagnóstico Gemini")
                 })
             return leads
         else:
