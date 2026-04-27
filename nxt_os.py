@@ -761,48 +761,18 @@ elif menu == "🔁 Follow Up":
                         st.link_button("📲 WhatsApp", link_wa_dinamico, use_container_width=True)
                     else:
                         st.caption("⚠️ Número sem WhatsApp detectado")
-                        with st.popover("📡 Canais Alternativos", use_container_width=True):
-                            if lead.get("link_ig"): st.link_button("📸 Instagram", lead["link_ig"], use_container_width=True)
-                            if lead.get("link_li"): st.link_button("👔 LinkedIn", lead["link_li"], use_container_width=True)
-                            if lead.get("link_mail"): st.link_button("📧 E-mail", lead["link_mail"], use_container_width=True)
 
-                elif meio == "Instagram":
-                    if lead.get("link_ig"):
-                        st.link_button("📸 Instagram", lead["link_ig"], use_container_width=True)
-                    else:
-                        st.button("📸 Sem IG", disabled=True, key=f"fu_noig_{lead['id']}")
+                elif meio == "Instagram" and lead.get("link_ig"):
+                    st.link_button("📸 Instagram", lead["link_ig"], use_container_width=True)
 
-                elif meio == "LinkedIn":
-                    if lead.get("link_li"):
-                        st.link_button("👔 LinkedIn", lead["link_li"], use_container_width=True)
-                    else:
-                        st.button("👔 Sem LI", disabled=True, key=f"fu_noli_{lead['id']}")
+                elif meio == "LinkedIn" and lead.get("link_li"):
+                    st.link_button("👔 LinkedIn", lead["link_li"], use_container_width=True)
 
-                elif meio == "E-mail":
-                    if lead.get("link_mail"):
-                        st.link_button("📧 E-mail", lead["link_mail"], use_container_width=True)
-                    else:
-                        st.button("📧 Sem e-mail", disabled=True, key=f"fu_nomail_{lead['id']}")
+                elif meio == "E-mail" and lead.get("link_mail"):
+                    st.link_button("📧 E-mail", lead["link_mail"], use_container_width=True)
 
-                elif meio == "Ligação":
-                    tel = lead.get("telefone", "")
-                    if tel:
-                        st.link_button("📞 Ligar", f"tel:{tel}", use_container_width=True)
-                    else:
-                        st.button("📞 Sem Tel.", disabled=True, key=f"fu_nocall_{lead['id']}")
-
-                else:
-                    # Fallback: sem meio registrado — exibe popover com todos os canais disponíveis
-                    with st.popover("📡 Canais", use_container_width=True):
-                        st.caption("Meio de contato não registrado. Escolha um canal:")
-                        if link_wa_dinamico:
-                            st.link_button("📲 WhatsApp", link_wa_dinamico, use_container_width=True)
-                        if lead.get("link_ig"):
-                            st.link_button("📸 Instagram", lead["link_ig"], use_container_width=True)
-                        if lead.get("link_li"):
-                            st.link_button("👔 LinkedIn", lead["link_li"], use_container_width=True)
-                        if lead.get("link_mail"):
-                            st.link_button("📧 E-mail", lead["link_mail"], use_container_width=True)
+                elif meio == "Ligação" and lead.get("telefone"):
+                    st.link_button("📞 Ligar", f"tel:{lead['telefone']}", use_container_width=True)
 
             with col_sel:
 
